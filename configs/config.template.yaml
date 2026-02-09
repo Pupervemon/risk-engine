@@ -1,0 +1,33 @@
+# Risk Control Service 配置文件模板 (config.template.yaml)
+
+grpc:
+  port: 9090
+
+redis:
+  # 服务器地址 (例如: "127.0.0.1:6379")
+  addr: "YOUR_REDIS_IP:6379"
+  # 密码 (生产环境请务必修改)
+  password: "YOUR_REDIS_PASSWORD"
+  db: 1
+  pool_size: 100
+  dial_timeout_seconds: 5
+  read_timeout_seconds: 3
+  write_timeout_seconds: 3
+
+# 风控业务规则配置
+risk_rules:
+  login:
+    max_fail_count: 5 # 登录失败触发验证的阈值
+    fail_count_expire_minutes: 30 # 失败计数窗口时间（分钟）
+  ip_rate_limit:
+    limit: 100 # 每秒最大请求数
+    window_seconds: 1
+  user_rate_limit:
+    # 刚才新增的 OnlineSelfTest 接口限流
+    online_self_test:
+      limit: 1
+      window_seconds: 5
+    # 刚才新增的 JudgeSubmission 接口限流
+    judge_submission:
+      limit: 1
+      window_seconds: 10
