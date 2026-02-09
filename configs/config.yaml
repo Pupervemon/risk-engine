@@ -1,0 +1,26 @@
+grpc:
+  port: 9090
+
+redis:
+  addr: "118.24.164.222:6379"
+  password: "kelab666" # 生产环境的密码
+  db: 1
+  pool_size: 100 # 连接池大小
+  dial_timeout_seconds: 5
+  read_timeout_seconds: 3
+  write_timeout_seconds: 3
+
+risk_rules:
+  login:
+    max_fail_count: 5 # 登录失败多少次触发验证
+    fail_count_expire_minutes: 30 # 失败计数有效期
+  ip_rate_limit:
+    limit: 5 # 每秒最多100次
+    window_seconds: 1
+  user_rate_limit:
+    online_self_test:
+      limit: 1
+      window_seconds: 5
+    judge_submission:
+      limit: 1
+      window_seconds: 10
