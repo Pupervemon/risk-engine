@@ -1,0 +1,29 @@
+# Captcha Service 配置文件模板 (captcha.template.yaml)
+
+http:
+  port: 8080
+
+grpc:
+  port: 9091
+
+redis:
+  # 服务器地址 (例如: "127.0.0.1:6379")
+  addr: "YOUR_REDIS_IP:6379"
+  # 密码 (生产环境请务必修改)
+  password: "YOUR_REDIS_PASSWORD"
+  db: 2
+  pool_size: 50
+  dial_timeout_seconds: 5
+  read_timeout_seconds: 3
+  write_timeout_seconds: 3
+
+captcha:
+  length: 4
+  ttl_seconds: 120
+  # 排除易混淆字符 (如 0,O,1,I)
+  allowed_chars: "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+  case_insensitive: true
+
+token:
+  ttl_seconds: 300
+  secret: "YOUR_TOKEN_SECRET"

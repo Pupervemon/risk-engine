@@ -1,0 +1,24 @@
+http:
+  port: 8080
+
+grpc:
+  port: 9091
+
+redis:
+  addr: "127.0.0.1:6379"
+  password: ""
+  db: 2
+  pool_size: 50
+  dial_timeout_seconds: 5
+  read_timeout_seconds: 3
+  write_timeout_seconds: 3
+
+captcha:
+  length: 4
+  ttl_seconds: 120
+  allowed_chars: "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+  case_insensitive: true
+
+token:
+  ttl_seconds: 300
+  secret: "CHANGE_ME"
