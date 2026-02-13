@@ -18,11 +18,14 @@ redis:
   write_timeout_seconds: 3
 
 captcha:
-  length: 4
   ttl_seconds: 120
-  # 排除易混淆字符 (如 0,O,1,I)
-  allowed_chars: "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
-  case_insensitive: true
+  width: 320
+  height: 180
+  # 滑块拼图块尺寸范围
+  graph_size_min: 52
+  graph_size_max: 64
+  # 前端滑块坐标允许误差（像素）
+  slider_tolerance: 8
 
 token:
   ttl_seconds: 300

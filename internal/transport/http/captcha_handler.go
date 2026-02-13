@@ -4,26 +4,29 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/Pupervemon/risk-engine/internal/service"
+	captchaservice "github.com/Pupervemon/risk-engine/internal/captcha/service"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 )
 
 type CaptchaHandler struct {
-	CaptchaService *service.CaptchaService
-	TokenService   *service.TokenService
+	CaptchaService *captchaservice.CaptchaService
+	TokenService   *captchaservice.TokenService
 	Logger         *zap.Logger
 }
 
 type captchaResponse struct {
-	CaptchaID string `json:"captchaId"`
-	Image     string `json:"image"`
-	ExpiresIn int    `json:"expiresIn"`
+	CaptchaID   string `json:"captchaId"`
+	MasterImage string `json:"masterImage"`
+	TileImage   string `json:"tileImage"`
+	TargetY     int    `json:"targetY"`
+	ExpiresIn   int    `json:"expiresIn"`
 }
 
 type verifyRequest struct {
-	CaptchaID   string `json:"captchaId"`
-	CaptchaText string `json:"captchaText"`
+	CaptchaID string `json:"captchaId"`
+	PointX    int    `json:"pointX"`
+	PointY    int    `json:"pointY"`
 }
 
 type verifyResponse struct {
@@ -37,7 +40,7 @@ type errorResponse struct {
 }
 
 func (h *CaptchaHandler) GetCaptcha(c *gin.Context) {
-	captchaID, imageBase64, _, ttlSeconds, err := h.CaptchaService.Generate(c.Request.Context())
+	challenge, err := h.CaptchaService.Generate(c.Request.Context())
 	if err != nil {
 		h.Logger.Error("生成验证码失败", zap.Error(err))
 		writeJSON(c, http.StatusInternalServerError, errorResponse{Error: "CAPTCHA_GENERATE_FAILED", Reason: "INTERNAL_ERROR"})
@@ -45,29 +48,43 @@ func (h *CaptchaHandler) GetCaptcha(c *gin.Context) {
 	}
 
 	writeJSON(c, http.StatusOK, captchaResponse{
-		CaptchaID: captchaID,
-		Image:     imageBase64,
-		ExpiresIn: ttlSeconds,
+		CaptchaID:   challenge.CaptchaID,
+		MasterImage: challenge.MasterImage,
+		TileImage:   challenge.TileImage,
+		TargetY:     challenge.TargetY,
+		ExpiresIn:   challenge.ExpiresIn,
 	})
 }
 
 func (h *CaptchaHandler) VerifyCaptcha(c *gin.Context) {
 	var req verifyRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
+		h.Logger.Warn("验证码请求参数解析失败", zap.Error(err))
 		writeJSON(c, http.StatusBadRequest, errorResponse{Error: "INVALID_JSON", Reason: "BAD_REQUEST"})
 		return
 	}
 
-	valid, reason, err := h.CaptchaService.Verify(c.Request.Context(), req.CaptchaID, req.CaptchaText)
+	h.Logger.Info("开始验证码校验",
+		zap.String("captchaId", req.CaptchaID),
+		zap.Int("pointX", req.PointX),
+		zap.Int("pointY", req.PointY))
+
+	valid, reason, err := h.CaptchaService.Verify(c.Request.Context(), req.CaptchaID, req.PointX, req.PointY)
 	if err != nil {
-		h.Logger.Error("验证码校验失败", zap.Error(err))
+		h.Logger.Error("验证码校验执行异常", zap.Error(err), zap.String("captchaId", req.CaptchaID))
 		writeJSON(c, http.StatusInternalServerError, errorResponse{Error: "CAPTCHA_VERIFY_FAILED", Reason: "INTERNAL_ERROR"})
 		return
 	}
 	if !valid {
+		h.Logger.Warn("验证码校验未通过",
+			zap.String("captchaId", req.CaptchaID),
+			zap.Int("pointX", req.PointX),
+			zap.String("reason", reason))
 		writeJSON(c, http.StatusBadRequest, errorResponse{Error: "CAPTCHA_INVALID", Reason: reason})
 		return
 	}
+
+	h.Logger.Info("验证码校验通过", zap.String("captchaId", req.CaptchaID))
 
 	token, exp, err := h.TokenService.IssueToken(req.CaptchaID)
 	if err != nil {

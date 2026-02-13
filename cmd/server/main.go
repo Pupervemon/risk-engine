@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/Pupervemon/risk-engine/internal/config"
-	"github.com/Pupervemon/risk-engine/internal/service"
+	riskservice "github.com/Pupervemon/risk-engine/internal/risk/service"
 	pb "github.com/Pupervemon/risk-proto/gen/go/risk/v1"
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
@@ -57,7 +57,7 @@ func main() {
 	)
 
 	// 6. 注册风控服务
-	riskService := service.NewRiskService(rdb, cfg.RiskRules, logger)
+	riskService := riskservice.NewRiskService(rdb, cfg.RiskRules, logger)
 	pb.RegisterRiskControlServiceServer(s, riskService)
 
 	// 7. 开启 gRPC 反射服务 (方便调试)

@@ -7,8 +7,8 @@ import (
 	"net/http"
 	"time"
 
+	captchaservice "github.com/Pupervemon/risk-engine/internal/captcha/service"
 	"github.com/Pupervemon/risk-engine/internal/config"
-	"github.com/Pupervemon/risk-engine/internal/service"
 	httptransport "github.com/Pupervemon/risk-engine/internal/transport/http"
 	captchapb "github.com/Pupervemon/risk-proto/gen/go/captcha/v1"
 	"github.com/redis/go-redis/v9"
@@ -43,9 +43,9 @@ func main() {
 	}
 	logger.Info("Redis 连接成功")
 
-	captchaService := service.NewCaptchaService(rdb, &cfg.Captcha, logger)
-	tokenService := service.NewTokenService(&cfg.Token)
-	grpcService := service.NewCaptchaTokenService(tokenService)
+	captchaService := captchaservice.NewCaptchaService(rdb, &cfg.Captcha, logger)
+	tokenService := captchaservice.NewTokenService(&cfg.Token)
+	grpcService := captchaservice.NewCaptchaTokenService(tokenService)
 
 	httpHandler := &httptransport.CaptchaHandler{
 		CaptchaService: captchaService,

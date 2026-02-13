@@ -1,12 +1,12 @@
 http:
-  port: 8080
+  port: 8091
 
 grpc:
   port: 9091
 
 redis:
-  addr: "127.0.0.1:6379"
-  password: ""
+  addr: "118.24.164.222:6379"
+  password: "kelab666"
   db: 2
   pool_size: 50
   dial_timeout_seconds: 5
@@ -14,10 +14,12 @@ redis:
   write_timeout_seconds: 3
 
 captcha:
-  length: 4
   ttl_seconds: 120
-  allowed_chars: "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
-  case_insensitive: true
+  width: 320
+  height: 180
+  graph_size_min: 52
+  graph_size_max: 64
+  slider_tolerance: 8
 
 token:
   ttl_seconds: 300

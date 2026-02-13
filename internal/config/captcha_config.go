@@ -15,10 +15,12 @@ type HTTPConfig struct {
 }
 
 type CaptchaConfigSpec struct {
-	Length          int    `mapstructure:"length"`
-	TTLSeconds      int    `mapstructure:"ttl_seconds"`
-	AllowedChars    string `mapstructure:"allowed_chars"`
-	CaseInsensitive bool   `mapstructure:"case_insensitive"`
+	TTLSeconds      int `mapstructure:"ttl_seconds"`
+	Width           int `mapstructure:"width"`
+	Height          int `mapstructure:"height"`
+	GraphSizeMin    int `mapstructure:"graph_size_min"`
+	GraphSizeMax    int `mapstructure:"graph_size_max"`
+	SliderTolerance int `mapstructure:"slider_tolerance"`
 }
 
 type TokenConfig struct {
