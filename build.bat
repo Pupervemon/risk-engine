@@ -1,7 +1,9 @@
 @echo off
-echo 开始构建项目...
+:: 切换终端编码为 UTF-8
+chcp 65001 >nul
 
-:: 创建 dist 文件夹（如果不存在）
+echo 开始构建风险引擎项目...
+
 if not exist "dist" (
     mkdir dist
 )
@@ -11,15 +13,26 @@ SET CGO_ENABLED=0
 SET GOOS=linux
 SET GOARCH=amd64
 
-:: 编译并将输出重定向到 dist 文件夹
-:: 假设你的 main.go 在项目根目录
-echo 正在编译 Linux (amd64) 版本至 dist/server...
-go build -o ./dist/server main.go
+echo ---------------------------------------
+echo [1/2] 正在编译 验证码服务 (captcha-server)...
+go build -o ./dist/captcha-server ./cmd/captcha-server/main.go
+if %errorlevel% neq 0 goto :ERROR
 
-if %errorlevel% equ 0 (
-    echo [成功] 构建完成！文件位于 dist/server
-) else (
-    echo [错误] 构建失败，请检查代码。
-)
+echo [2/2] 正在编译 风险主服务 (risk-server)...
+go build -o ./dist/risk-server ./cmd/risk-server/main.go
+if %errorlevel% neq 0 goto :ERROR
+echo ---------------------------------------
 
+echo [成功] 构建完成！
+echo 编译结果：
+echo   - dist/captcha-server ^(验证码服务^)
+echo   - dist/risk-server    ^(风险主服务^)
+goto :END
+
+:ERROR
+echo ---------------------------------------
+echo [错误] 构建过程中出现错误，请检查代码。
+exit /b 1
+
+:END
 pause

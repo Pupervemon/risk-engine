@@ -1,4 +1,4 @@
-# Risk Control Service 配置文件模板 (config.template.yaml)
+# Risk Engine 配置文件模板 (risk.template.yaml)
 
 grpc:
   port: 9090

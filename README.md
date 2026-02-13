@@ -98,7 +98,7 @@ risk-engine/
 
 1. 复制配置模板：
    ```bash
-   cp configs/config.template.yaml configs/config.yaml
+   cp configs/risk.template.yaml configs/risk.yaml
    ```
 2. (可选) 配置验证码服务：
    ```bash
