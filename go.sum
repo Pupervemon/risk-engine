@@ -1,3 +1,5 @@
+github.com/Pupervemon/risk-proto v0.0.0-20260212082950-7361777448ee h1:aSitRHdtEgFZb+usn6Y1YeVfQJ7b0Ngxc0tijB8aq9I=
+github.com/Pupervemon/risk-proto v0.0.0-20260212082950-7361777448ee/go.mod h1:5iERGsCM4sZlM7ofqTbSIK1UeXuM1J2p82VXml0lv/0=
 github.com/bsm/ginkgo/v2 v2.12.0 h1:Ny8MWAHyOepLGlLKYmXG4IEkioBysk6GpaRTLC8zwWs=
 github.com/bsm/ginkgo/v2 v2.12.0/go.mod h1:SwYbGRRDovPVboqFv0tPTcG1sN61LM1Z4ARdbAV9g4c=
 github.com/bsm/gomega v1.27.10 h1:yeMWxP2pV2fG3FgAODIY8EiRE3dy0aeFYt4l7wh6yKA=

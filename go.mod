@@ -3,7 +3,7 @@ module github.com/Pupervemon/risk-engine
 go 1.25.1
 
 require (
-	github.com/Pupervemon/risk-proto v0.0.0-20260205115959-0de71ce61938
+	github.com/Pupervemon/risk-proto v0.0.0-20260212082950-7361777448ee
 	github.com/gin-gonic/gin v1.10.0
 	github.com/redis/go-redis/v9 v9.17.3
 	github.com/spf13/viper v1.21.0
@@ -12,7 +12,7 @@ require (
 	google.golang.org/grpc v1.78.0
 )
 
-replace github.com/Pupervemon/risk-proto => ../risk-proto
+// replace github.com/Pupervemon/risk-proto => ../risk-proto
 
 require (
 	github.com/bytedance/sonic v1.11.6 // indirect
