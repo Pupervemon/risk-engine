@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/Pupervemon/risk-engine/internal/config"
+	"github.com/Pupervemon/risk-engine/internal/shared/config"
 	pb "github.com/Pupervemon/risk-proto/gen/go/risk/v1"
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
@@ -50,7 +50,7 @@ func (s *RiskService) Check(ctx context.Context, req *pb.CheckRequest) (*pb.Chec
 
 	// 3. 防暴力破解检测 (使用配置)
 	if req.Scene == pb.Scene_SCENE_LOGIN {
-		if s.getFailCount(ctx, req.Ip) > s.Config.Login.MaxFailCount {
+		if s.getFailCount(ctx, req.Ip) > int64(s.Config.Login.MaxFailCount) {
 			s.Logger.Info("触发防爆破规则", zap.String("ip", req.Ip))
 			return &pb.CheckResponse{Action: pb.Action_ACTION_VERIFY, Reason: "TOO_MANY_FAILED_ATTEMPTS"}, nil
 		}
@@ -171,7 +171,7 @@ var ipRateLimitLua = redis.NewScript(`
 
 func (s *RiskService) checkIpRateLimit(ctx context.Context, ip string) bool {
 	key := fmt.Sprintf("risk:rate:ip:%s", ip)
-	limit := s.Config.IpRateLimit.Limit
+	limit := int64(s.Config.IpRateLimit.Limit)
 	windowSeconds := s.Config.IpRateLimit.WindowSeconds
 
 	// 2. 执行 Lua 脚本 (将 INCR 和 EXPIRE 合并为一个原子操作)
@@ -189,13 +189,13 @@ func (s *RiskService) checkIpRateLimit(ctx context.Context, ip string) bool {
 	return false
 }
 
-func (s *RiskService) checkUserRateLimit(ctx context.Context, userID string, scope string, rule config.RateLimitConfig) bool {
+func (s *RiskService) checkUserRateLimit(ctx context.Context, userID string, scope string, rule config.UserRateLimitRule) bool {
 	if userID == "" {
 		return false
 	}
 
 	key := fmt.Sprintf("risk:rate:user:%s:%s", userID, scope)
-	limit := rule.Limit
+	limit := int64(rule.Limit)
 	windowSeconds := rule.WindowSeconds
 
 	val, err := ipRateLimitLua.Run(ctx, s.Rdb, []string{key}, windowSeconds).Int64()

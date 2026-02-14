@@ -1,5 +1,8 @@
 # Risk Engine 配置文件模板 (risk.template.yaml)
 
+http:
+  port: 9080 # HTTP健康检查端口
+
 grpc:
   port: 9090
 
@@ -31,3 +34,18 @@ risk_rules:
     judge_submission:
       limit: 1
       window_seconds: 10
+
+# Nacos服务注册配置
+nacos:
+  enable: true # 是否启用Nacos服务注册
+  server_addr: "YOUR_NACOS_IP:8848" # Nacos服务器地址
+  namespace: "" # 命名空间（空字符串表示public命名空间）
+  service_name: "risk-service" # 服务名称（用于服务发现）
+  group_name: "DEFAULT_GROUP" # 服务分组
+  cluster_name: "DEFAULT" # 集群名称
+  weight: 1.0 # 服务权重（用于负载均衡）
+  metadata: # 服务元数据
+    version: "1.0.0"
+    protocol: "grpc"
+    grpc-port: "9090"
+    env: "prod"

@@ -11,7 +11,7 @@ import (
 	"image/draw"
 	"time"
 
-	"github.com/Pupervemon/risk-engine/internal/config"
+	"github.com/Pupervemon/risk-engine/internal/shared/config"
 	"github.com/redis/go-redis/v9"
 	"github.com/wenlng/go-captcha/v2/base/option"
 	"github.com/wenlng/go-captcha/v2/slide"

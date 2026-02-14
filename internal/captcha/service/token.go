@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Pupervemon/risk-engine/internal/config"
+	"github.com/Pupervemon/risk-engine/internal/shared/config"
 )
 
 type TokenService struct {
