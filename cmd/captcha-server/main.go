@@ -22,6 +22,7 @@ import (
 )
 
 func main() {
+
 	// 1. 加载配置
 	cfg, err := config.LoadCaptchaConfig("configs")
 	if err != nil {
@@ -102,7 +103,8 @@ func main() {
 		Weight:      cfg.Nacos.Weight,
 		Enable:      cfg.Nacos.Enable,
 		Metadata:    cfg.Nacos.Metadata,
-		ServicePort: cfg.HTTP.Port,
+		HttpPort:    cfg.HTTP.Port,
+		GrpcPort:    cfg.Grpc.Port,
 		HealthCheck: true,
 	}, logger)
 	if err != nil {

@@ -1,4 +1,7 @@
-# Captcha Service 配置文件模板 (captcha.template.yaml)
+# ===============================================================
+# Captcha Service - Configuration Template
+# 配置文件模板，用于参考和快速部署
+# ===============================================================
 
 http:
   port: 8091
@@ -27,9 +30,10 @@ captcha:
   # 前端滑块坐标允许误差（像素）
   slider_tolerance: 8
 
+# Token 配置
 token:
   ttl_seconds: 300
-  secret: "YOUR_TOKEN_SECRET"
+  secret: "YOUR_TOKEN_SECRET" # 必须通过 TOKEN_SECRET 环境变量设置
 
 # Nacos服务注册配置
 nacos:

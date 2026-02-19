@@ -237,15 +237,46 @@ cd risk-engine
 
 ### 2. 配置环境
 
-#### 2.1 创建配置文件
+**本项目支持多环境配置管理** 🔧
+
+通过环境变量 `APP_ENV` 切换开发环境（dev）和生产环境（prod）配置：
 
 ```bash
-# 复制配置模板
+# Windows PowerShell - 开发环境（默认）
+$env:APP_ENV="dev"
+go run cmd/risk-server/main.go
+
+# Windows PowerShell - 生产环境
+$env:APP_ENV="prod"
+go run cmd/risk-server/main.go
+
+# Linux/Mac - 开发环境
+APP_ENV=dev go run cmd/risk-server/main.go
+
+# 或使用快速启动脚本
+.\start.ps1 dev risk      # Windows
+./start.sh dev risk       # Linux/Mac
+```
+
+📚 **详细配置指南**：请参阅 [多环境配置文档](docs/CONFIG_GUIDE.md)
+
+环境配置文件说明：
+- `configs/risk.dev.yaml` - 开发环境（本地Redis，无Nacos）
+- `configs/risk.prod.yaml` - 生产环境（远程Redis，启用Nacos）
+- `configs/captcha.dev.yaml` - Captcha开发环境配置
+- `configs/captcha.prod.yaml` - Captcha生产环境配置
+
+#### 2.1 创建配置文件（可选）
+
+如果需要自定义配置，可以从模板创建：
+
+```bash
+# 复制配置模板（可选，已有 dev/prod 配置文件）
 cp configs/captcha.template.yaml configs/captcha.yaml
 cp configs/risk.template.yaml configs/risk.yaml
 ```
 
-#### 2.2 修改关键配置
+#### 2.2 修改关键配置（可选）
 
 **修改 `configs/captcha.yaml`**：
 ```yaml

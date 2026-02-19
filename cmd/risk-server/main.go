@@ -22,8 +22,9 @@ import (
 )
 
 func main() {
+
 	// 1. 加载配置
-	cfg, err := config.LoadConfig("configs")
+	cfg, err := config.LoadRiskConfig("configs")
 	if err != nil {
 		panic(fmt.Sprintf("无法加载配置: %v", err))
 	}
@@ -93,7 +94,8 @@ func main() {
 		Weight:      cfg.Nacos.Weight,
 		Enable:      cfg.Nacos.Enable,
 		Metadata:    cfg.Nacos.Metadata,
-		ServicePort: cfg.HTTP.Port, // 使用HTTP端口进行健康检查
+		HttpPort:    cfg.HTTP.Port,
+		GrpcPort:    cfg.Grpc.Port,
 		HealthCheck: true,
 	}, logger)
 	if err != nil {

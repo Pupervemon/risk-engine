@@ -22,7 +22,8 @@ type NacosConfig struct {
 	Weight      float64           // 服务权重
 	Enable      bool              // 是否启用Nacos
 	Metadata    map[string]string // 服务元数据
-	ServicePort int               // 服务端口（用于健康检查）
+	HttpPort    int               // HTTP端口
+	GrpcPort    int               // gRPC端口
 	HealthCheck bool              // 是否启用健康检查
 }
 
@@ -43,6 +44,18 @@ func NewNacosRegistry(config *NacosConfig, logger *zap.Logger) (*NacosRegistry, 
 			config: config,
 			logger: logger,
 		}, nil
+	}
+
+	// 初始化元数据
+	if config.Metadata == nil {
+		config.Metadata = make(map[string]string)
+	}
+	// 规范化：自动将端口信息注入元数据
+	if config.HttpPort > 0 {
+		config.Metadata["http-port"] = strconv.Itoa(config.HttpPort)
+	}
+	if config.GrpcPort > 0 {
+		config.Metadata["grpc-port"] = strconv.Itoa(config.GrpcPort)
 	}
 
 	// 解析Nacos服务器地址
@@ -107,9 +120,16 @@ func (nr *NacosRegistry) Register() error {
 		return nil
 	}
 
+	// 规范化：默认使用 HTTP 端口作为 Nacos 注册的主端口，
+	// 如果没有 HTTP 端口则使用 gRPC 端口
+	registerPort := nr.config.HttpPort
+	if registerPort == 0 {
+		registerPort = nr.config.GrpcPort
+	}
+
 	success, err := nr.client.RegisterInstance(vo.RegisterInstanceParam{
 		Ip:          nr.localIP,
-		Port:        uint64(nr.config.ServicePort),
+		Port:        uint64(registerPort),
 		ServiceName: nr.config.ServiceName,
 		GroupName:   nr.config.GroupName,
 		ClusterName: nr.config.ClusterName,
@@ -127,7 +147,7 @@ func (nr *NacosRegistry) Register() error {
 	nr.logger.Info("服务注册成功",
 		zap.String("service_name", nr.config.ServiceName),
 		zap.String("ip", nr.localIP),
-		zap.Int("port", nr.config.ServicePort),
+		zap.Int("port", registerPort),
 		zap.String("group", nr.config.GroupName),
 		zap.String("cluster", nr.config.ClusterName))
 
@@ -141,9 +161,14 @@ func (nr *NacosRegistry) Deregister() error {
 		return nil
 	}
 
+	registerPort := nr.config.HttpPort
+	if registerPort == 0 {
+		registerPort = nr.config.GrpcPort
+	}
+
 	success, err := nr.client.DeregisterInstance(vo.DeregisterInstanceParam{
 		Ip:          nr.localIP,
-		Port:        uint64(nr.config.ServicePort),
+		Port:        uint64(registerPort),
 		ServiceName: nr.config.ServiceName,
 		GroupName:   nr.config.GroupName,
 		Cluster:     nr.config.ClusterName,
@@ -166,11 +191,16 @@ func (nr *NacosRegistry) UpdateHealth(healthy bool) error {
 		return nil
 	}
 
+	registerPort := nr.config.HttpPort
+	if registerPort == 0 {
+		registerPort = nr.config.GrpcPort
+	}
+
 	// Nacos SDK v2会自动通过gRPC长连接发送心跳
 	// 这个方法可用于手动更新健康状态（例如业务层主动上报）
 	_, err := nr.client.UpdateInstance(vo.UpdateInstanceParam{
 		Ip:          nr.localIP,
-		Port:        uint64(nr.config.ServicePort),
+		Port:        uint64(registerPort),
 		ServiceName: nr.config.ServiceName,
 		GroupName:   nr.config.GroupName,
 		ClusterName: nr.config.ClusterName,

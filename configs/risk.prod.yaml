@@ -1,0 +1,50 @@
+# ===============================================================
+# Risk Service - Production Profile
+# 生产环境配置，敏感信息依赖环境变量注入
+# ===============================================================
+
+http:
+  port: 9080 # HTTP健康检查端口
+
+grpc:
+  port: 9090
+
+redis:
+  addr: "redis-internal:6379" # 内部域名
+  password: "" # 必须由 REDIS_PASSWORD 注入，否则 Validate 会报错
+  db: 1
+  pool_size: 100
+  dial_timeout_seconds: 5
+  read_timeout_seconds: 2
+  write_timeout_seconds: 2
+
+# 风控业务规则配置（生产环境）
+risk_rules:
+  login:
+    max_fail_count: 5
+    fail_count_expire_minutes: 30
+  ip_rate_limit:
+    limit: 100
+    window_seconds: 1
+  user_rate_limit:
+    online_self_test:
+      limit: 1
+      window_seconds: 5
+    judge_submission:
+      limit: 1
+      window_seconds: 10
+
+# Nacos服务注册配置
+nacos:
+  enable: true
+  server_addr: "nacos-internal:8848"
+  namespace: "" # 必须由 NACOS_NAMESPACE 注入
+  service_name: "risk-service"
+  group_name: "PROD_GROUP"
+  cluster_name: "prod-cluster"
+  weight: 1.0
+  metadata:
+    version: "1.0.0"
+    protocol: "grpc"
+    grpc-port: "9090"
+    env: "prod"

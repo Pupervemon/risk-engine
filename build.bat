@@ -15,11 +15,11 @@ SET GOARCH=amd64
 
 echo ---------------------------------------
 echo [1/2] 正在编译 验证码服务 (captcha-server)...
-go build -o ./dist/captcha-server ./cmd/captcha-server/main.go
+go build -o ./dist/captcha-server ./cmd/captcha-server
 if %errorlevel% neq 0 goto :ERROR
 
 echo [2/2] 正在编译 风险主服务 (risk-server)...
-go build -o ./dist/risk-server ./cmd/risk-server/main.go
+go build -o ./dist/risk-server ./cmd/risk-server
 if %errorlevel% neq 0 goto :ERROR
 echo ---------------------------------------
 

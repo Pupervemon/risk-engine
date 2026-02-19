@@ -37,6 +37,11 @@ Thumbs.db
 /configs/captcha.yaml
 /configs/risk.yaml
 
-# 允许提交配置模板文件 (如果之前被忽略了，可以用 ! 强制包含)
+# 允许提交配置模板文件和环境配置文件
 !/configs/config.template.yaml
 !/configs/captcha.template.yaml
+!/configs/risk.template.yaml
+!/configs/risk.dev.yaml
+!/configs/risk.prod.yaml
+!/configs/captcha.dev.yaml
+!/configs/captcha.prod.yaml

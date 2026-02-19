@@ -48,31 +48,56 @@ func (s *RiskService) Check(ctx context.Context, req *pb.CheckRequest) (*pb.Chec
 		return &pb.CheckResponse{Action: pb.Action_ACTION_REJECT, Reason: "IP_RATE_LIMIT_EXCEEDED"}, nil
 	}
 
-	// 3. 防暴力破解检测 (使用配置)
+	// 3. 防暴力破解检测 (使用配置) - 优先检查用户ID
 	if req.Scene == pb.Scene_SCENE_LOGIN {
-		if s.getFailCount(ctx, req.Ip) > int64(s.Config.Login.MaxFailCount) {
-			s.Logger.Info("触发防爆破规则", zap.String("ip", req.Ip))
-			return &pb.CheckResponse{Action: pb.Action_ACTION_VERIFY, Reason: "TOO_MANY_FAILED_ATTEMPTS"}, nil
+		// 优先使用用户ID进行防暴力破解检测
+		if req.UserId != "" {
+			if s.getFailCountByUserId(ctx, req.UserId) > int64(s.Config.Login.MaxFailCount) {
+				s.Logger.Info("触发防爆破规则", zap.String("userId", req.UserId))
+				return &pb.CheckResponse{Action: pb.Action_ACTION_VERIFY, Reason: "TOO_MANY_FAILED_ATTEMPTS"}, nil
+			}
 		}
+		// TODO: 未来可扩展基于IP的防暴力破解检测
+		// if s.getFailCountByIp(ctx, req.Ip) > int64(s.Config.Login.MaxFailCount) {
+		// 	s.Logger.Info("触发防爆破规则(IP)", zap.String("ip", req.Ip))
+		// 	return &pb.CheckResponse{Action: pb.Action_ACTION_VERIFY, Reason: "TOO_MANY_FAILED_ATTEMPTS_IP"}, nil
+		// }
 	}
 
 	return &pb.CheckResponse{Action: pb.Action_ACTION_PASS, Reason: "PASS"}, nil
 }
 
-// ReportEvent 核心上报逻辑
+// ReportEvent 核心上报逻辑 - 优先处理用户ID
 func (s *RiskService) ReportEvent(ctx context.Context, req *pb.ReportEventRequest) (*pb.ReportEventResponse, error) {
 	if !req.IsSuccess && req.Scene == pb.Scene_SCENE_LOGIN {
-		key := fmt.Sprintf("risk:fail_count:login:%s", req.Ip)
+		// 优先使用用户ID记录失败次数
+		if req.UserId != "" {
+			key := fmt.Sprintf("risk:fail_count:login:uid:%s", req.UserId)
 
-		// 使用 Pipeline 提高性能，减少网络往返
-		pipe := s.Rdb.Pipeline()
-		pipe.Incr(ctx, key)
-		pipe.Expire(ctx, key, time.Duration(s.Config.Login.FailCountExpireMinutes)*time.Minute)
-		_, err := pipe.Exec(ctx)
-		if err != nil {
-			s.Logger.Error("上报事件 Redis 操作失败", zap.Error(err))
-			// 上报失败不应阻塞主流程，直接返回成功
+			// 使用 Pipeline 提高性能，减少网络往返
+			pipe := s.Rdb.Pipeline()
+			pipe.Incr(ctx, key)
+			pipe.Expire(ctx, key, time.Duration(s.Config.Login.FailCountExpireMinutes)*time.Minute)
+			_, err := pipe.Exec(ctx)
+			if err != nil {
+				s.Logger.Error("上报事件 Redis 操作失败(用户ID)", zap.Error(err), zap.String("userId", req.UserId))
+				// 上报失败不应阻塞主流程，直接返回成功
+			} else {
+				s.Logger.Info("记录登录失败事件", zap.String("userId", req.UserId))
+			}
 		}
+
+		// TODO: 未来可扩展基于IP的上报逻辑
+		// if req.Ip != "" {
+		// 	ipKey := fmt.Sprintf("risk:fail_count:login:ip:%s", req.Ip)
+		// 	pipe := s.Rdb.Pipeline()
+		// 	pipe.Incr(ctx, ipKey)
+		// 	pipe.Expire(ctx, ipKey, time.Duration(s.Config.Login.FailCountExpireMinutes)*time.Minute)
+		// 	_, err := pipe.Exec(ctx)
+		// 	if err != nil {
+		// 		s.Logger.Error("上报事件 Redis 操作失败(IP)", zap.Error(err), zap.String("ip", req.Ip))
+		// 	}
+		// }
 	}
 	return &pb.ReportEventResponse{Received: true}, nil
 }
@@ -211,9 +236,19 @@ func (s *RiskService) checkUserRateLimit(ctx context.Context, userID string, sco
 	return false
 }
 
-// getFailCount 获取失败计数
-func (s *RiskService) getFailCount(ctx context.Context, ip string) int64 {
-	key := fmt.Sprintf("risk:fail_count:login:%s", ip)
+// getFailCountByUserId 获取用户的失败计数
+func (s *RiskService) getFailCountByUserId(ctx context.Context, userId string) int64 {
+	key := fmt.Sprintf("risk:fail_count:login:uid:%s", userId)
+	val, err := s.Rdb.Get(ctx, key).Int64()
+	if err != nil {
+		return 0
+	}
+	return val
+}
+
+// getFailCountByIp 获取IP的失败计数 (保留供未来扩展)
+func (s *RiskService) getFailCountByIp(ctx context.Context, ip string) int64 {
+	key := fmt.Sprintf("risk:fail_count:login:ip:%s", ip)
 	val, err := s.Rdb.Get(ctx, key).Int64()
 	if err != nil {
 		return 0

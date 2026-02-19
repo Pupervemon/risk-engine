@@ -1,0 +1,45 @@
+# ===============================================================
+# Captcha Service - Production Profile
+# 生产环境配置，敏感信息依赖环境变量注入
+# ===============================================================
+
+http:
+  port: 8080 # 生产环境通常用标准端口
+
+grpc:
+  port: 8090
+
+redis:
+  addr: "redis-internal:6379" # 内部域名
+  password: "" # 必须由 REDIS_PASSWORD 注入，否则 Validate 会报错
+  db: 2
+  pool_size: 100
+  dial_timeout_seconds: 5
+  read_timeout_seconds: 2
+  write_timeout_seconds: 2
+
+captcha:
+  ttl_seconds: 120 # 生产环境有效期较短
+  width: 320
+  height: 180
+  graph_size_min: 52
+  graph_size_max: 64
+  slider_tolerance: 3 # 生产环境容差更严格
+
+# Token 配置（生产环境）
+token:
+  ttl_seconds: 300
+  secret: "" # 必须由 TOKEN_SECRET 环境变量注入，否则 Validate 会报错
+
+nacos:
+  enable: true
+  server_addr: "nacos-internal:8848"
+  namespace: "" # 必须由 NACOS_NAMESPACE 注入
+  service_name: "captcha-service"
+  group_name: "PROD_GROUP"
+  cluster_name: "prod-cluster"
+  weight: 1.0
+  metadata:
+    version: "1.0.0"
+    protocol: "grpc"
+    env: "prod"
