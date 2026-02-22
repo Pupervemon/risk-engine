@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -11,6 +12,7 @@
             position: relative;
             user-select: none;
         }
+
         .slider-bar {
             height: 40px;
             background: #f0f0f0;
@@ -18,11 +20,12 @@
             border: 1px solid #e4e4e4;
             position: relative;
         }
+
         .slider-handle {
             width: 40px;
             height: 40px;
             background: #fff;
-            box-shadow: 0 0 3px rgba(0,0,0,0.3);
+            box-shadow: 0 0 3px rgba(0, 0, 0, 0.3);
             cursor: pointer;
             position: absolute;
             top: -1px;
@@ -33,10 +36,12 @@
             transition: background 0.2s;
             z-index: 10;
         }
+
         .slider-handle:hover {
             background: #1890ff;
             color: #fff;
         }
+
         .slider-track {
             height: 38px;
             background: #d1e9ff;
@@ -45,6 +50,7 @@
             left: 0;
             width: 0;
         }
+
         .captcha-img-container {
             position: relative;
             margin-bottom: 10px;
@@ -52,11 +58,13 @@
             display: none;
             border-radius: 4px;
         }
+
         #master-img {
             width: 320px;
             height: 180px;
             display: block;
         }
+
         #tile-img {
             position: absolute;
             left: 0;
@@ -64,43 +72,50 @@
         }
     </style>
 </head>
+
 <body class="bg-gray-100 flex items-center justify-center h-screen">
     <div class="bg-white p-8 rounded-lg shadow-md w-[384px]">
         <h1 class="text-xl font-bold mb-6 text-center text-gray-800">验证码服务验证</h1>
-        
+
         <div class="captcha-container mx-auto" id="captcha-box">
             <div class="captcha-img-container" id="img-container">
                 <img id="master-img" src="" alt="背景图">
                 <img id="tile-img" src="" alt="滑块图">
             </div>
-            
+
             <div class="slider-bar">
                 <div class="slider-track" id="slider-track"></div>
                 <div class="slider-handle" id="slider-handle">
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M5 5l7 7-7 7"></path>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M13 5l7 7-7 7M5 5l7 7-7 7"></path>
                     </svg>
                 </div>
-                <div class="absolute inset-0 flex items-center justify-center text-sm text-gray-400 pointer-events-none">
+                <div
+                    class="absolute inset-0 flex items-center justify-center text-sm text-gray-400 pointer-events-none">
                     向右滑动完成验证
                 </div>
             </div>
         </div>
 
         <div id="status" class="mt-4 text-center text-sm font-medium h-5"></div>
-        <button id="refresh-btn" class="mt-6 w-full py-2 bg-blue-500 hover:bg-blue-600 rounded text-white font-medium transition">刷新验证码</button>
-        
+        <button id="refresh-btn"
+            class="mt-6 w-full py-2 bg-blue-500 hover:bg-blue-600 rounded text-white font-medium transition">刷新验证码</button>
+
         <div class="mt-4 text-xs text-gray-400 text-center">
-            后端地址: <span id="api-url">http://localhost:8080</span>
+            后端地址: <span id="api-url">http://localhost:8091</span>
         </div>
     </div>
 
     <script>
-        const API_BASE = 'http://localhost:8080/api/v1';
+        const API_BASE = 'http://localhost:8091/api/v1';
         let captchaId = '';
         let startX = 0;
         let isMoving = false;
         let currentX = 0;
+        let requireMouseTrack = false; // 是否需要鼠标轨迹
+        let mouseTrack = []; // 鼠标轨迹数据
+        let trackStartTime = 0; // 轨迹开始时间
 
         const handle = document.getElementById('slider-handle');
         const track = document.getElementById('slider-track');
@@ -113,20 +128,31 @@
                 const res = await fetch(`${API_BASE}/captcha`);
                 if (!res.ok) throw new Error('后端服务异常');
                 const data = await res.json();
-                
+
                 captchaId = data.captchaId;
+                requireMouseTrack = data.requireMouseTrack || false;
+
                 document.getElementById('master-img').src = data.masterImage;
                 tile.src = data.tileImage;
                 tile.style.top = `${data.targetY}px`;
                 tile.style.left = '0px';
-                
+
                 resetSlider();
-                
+
                 imgContainer.style.display = 'block';
-                status.textContent = '验证码加载成功';
+
+                const trackInfo = requireMouseTrack ? ' (需要轨迹验证)' : '';
+                status.textContent = '验证码加载成功' + trackInfo;
                 status.className = 'mt-4 text-center text-sm font-medium text-blue-500';
+
+                console.log('验证码信息:', {
+                    captchaId,
+                    requireMouseTrack,
+                    expiresIn: data.expiresIn
+                });
             } catch (err) {
-                status.textContent = '获取失败，请确保后端 8080 端口已启动';
+                console.error('获取验证码失败:', err);
+                status.textContent = '获取失败，请确保后端 8091 端口已启动';
                 status.className = 'mt-4 text-center text-sm font-medium text-red-500';
             }
         }
@@ -138,6 +164,7 @@
             handle.style.background = '#fff';
             handle.style.color = 'currentColor';
             currentX = 0;
+            mouseTrack = [];
         }
 
         handle.onmousedown = (e) => {
@@ -147,6 +174,19 @@
             handle.style.transition = 'none';
             track.style.transition = 'none';
             tile.style.transition = 'none';
+
+            // 初始化鼠标轨迹
+            mouseTrack = [];
+            trackStartTime = Date.now();
+
+            // 记录起始点
+            if (requireMouseTrack) {
+                mouseTrack.push({
+                    x: 0,
+                    y: 0,
+                    t: 0
+                });
+            }
         };
 
         window.onmousemove = (e) => {
@@ -154,40 +194,88 @@
             let moveX = e.clientX - startX;
             if (moveX < 0) moveX = 0;
             if (moveX > 280) moveX = 280; // 320px 容器 - 40px 滑块
-            
+
             currentX = moveX;
             handle.style.left = `${moveX}px`;
             track.style.width = `${moveX}px`;
             tile.style.left = `${moveX}px`;
+
+            // 记录鼠标轨迹（如果需要）
+            if (requireMouseTrack) {
+                const time = Date.now() - trackStartTime;
+                mouseTrack.push({
+                    x: Math.round(moveX),
+                    y: 0,
+                    t: time
+                });
+            }
         };
 
         window.onmouseup = async () => {
             if (!isMoving) return;
             isMoving = false;
-            
+
+            // 记录结束点
+            if (requireMouseTrack) {
+                const time = Date.now() - trackStartTime;
+                mouseTrack.push({
+                    x: Math.round(currentX),
+                    y: 0,
+                    t: time
+                });
+            }
+
+            console.log('验证请求数据:', {
+                captchaId,
+                pointX: Math.round(currentX),
+                pointY: 0,
+                trackPoints: requireMouseTrack ? mouseTrack.length : 0,
+                trackDuration: requireMouseTrack ? (Date.now() - trackStartTime) + 'ms' : 'N/A'
+            });
+
             try {
+                const requestBody = {
+                    captchaId: captchaId,
+                    pointX: Math.round(currentX),
+                    pointY: 0
+                };
+
+                // 如果需要轨迹，添加轨迹数据
+                if (requireMouseTrack && mouseTrack.length > 0) {
+                    requestBody.mouseTrack = mouseTrack;
+                }
+
                 const res = await fetch(`${API_BASE}/captcha/verify`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        captchaId: captchaId,
-                        pointX: Math.round(currentX),
-                        pointY: 0
-                    })
+                    body: JSON.stringify(requestBody)
                 });
-                
+
                 const data = await res.json();
                 if (res.ok) {
-                    status.textContent = '验证成功！';
+                    status.textContent = '验证成功！Token: ' + data.token.substring(0, 20) + '...';
                     status.className = 'mt-4 text-center text-sm font-medium text-green-600';
                     handle.style.background = '#10b981';
                     handle.style.color = '#fff';
+
+                    console.log('验证成功:', {
+                        token: data.token,
+                        expiresIn: data.expiresIn
+                    });
                 } else {
-                    status.textContent = '验证失败: ' + (data.reason || '位置不准确');
+                    const reason = data.reason || '位置不准确';
+                    status.textContent = '验证失败: ' + reason;
                     status.className = 'mt-4 text-center text-sm font-medium text-red-500';
+
+                    console.warn('验证失败:', {
+                        error: data.error,
+                        reason: reason
+                    });
+
                     setTimeout(fetchCaptcha, 800);
                 }
             } catch (err) {
+                console.error('验证请求异常:', err);
                 status.textContent = '验证请求失败';
                 status.className = 'mt-4 text-center text-sm font-medium text-red-500';
             }
@@ -199,4 +287,5 @@
         fetchCaptcha();
     </script>
 </body>
+
 </html>

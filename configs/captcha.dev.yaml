@@ -27,6 +27,28 @@ captcha:
   graph_size_max: 64
   slider_tolerance: 10
 
+  # 图片池配置
+  image_pool:
+    enabled: false # 开发环境默认关闭，可通过环境变量启用
+    pool_size: 100 # 开发环境可以多一些方便测试
+    refresh_interval_minutes: 60 # 每小时刷新
+
+  # 轨迹校验配置
+  track_validation:
+    enabled: false # 开发环境默认关闭，避免影响调试
+    min_points: 10 # 开发环境放宽要求
+    min_duration_ms: 500
+    max_duration_ms: 20000
+    point_tolerance: 20 # 端点容差（像素）
+
+  # 外部图片API配置
+  external_image_api:
+    url: "" # 通过环境变量 CAPTCHA_EXTERNAL_IMAGE_API_URL 注入
+    api_key: "" # 通过环境变量 CAPTCHA_EXTERNAL_IMAGE_API_API_KEY 注入
+    timeout_seconds: 30
+    rate_limit_per_minute: 100
+    retry_count: 3
+
 # Token 配置
 token:
   ttl_seconds: 600

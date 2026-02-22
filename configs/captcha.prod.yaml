@@ -4,10 +4,10 @@
 # ===============================================================
 
 http:
-  port: 8080 # 生产环境通常用标准端口
+  port: 8091 # 生产环境通常用标准端口
 
 grpc:
-  port: 8090
+  port: 9091
 
 redis:
   addr: "redis-internal:6379" # 内部域名
@@ -26,6 +26,28 @@ captcha:
   graph_size_max: 64
   slider_tolerance: 3 # 生产环境容差更严格
 
+  # 图片池配置
+  image_pool:
+    enabled: true # 生产环境启用
+    pool_size: 50 # 生产环境适中即可
+    refresh_interval_minutes: 60 # 每小时刷新
+
+  # 轨迹校验配置
+  track_validation:
+    enabled: true # 生产环境启用
+    min_points: 15 # 最少15个轨迹点
+    min_duration_ms: 800 # 最少800ms
+    max_duration_ms: 15000 # 最多15秒
+    point_tolerance: 20 # 端点容差（像素）
+
+  # 外部图片API配置
+  external_image_api:
+    url: "" # 必须通过环境变量 CAPTCHA_EXTERNAL_IMAGE_API_URL 注入
+    api_key: "" # 必须通过环境变量 CAPTCHA_EXTERNAL_IMAGE_API_API_KEY 注入
+    timeout_seconds: 30
+    rate_limit_per_minute: 50 # 生产环境注意速率限制
+    retry_count: 3
+
 # Token 配置（生产环境）
 token:
   ttl_seconds: 300
@@ -36,7 +58,7 @@ nacos:
   server_addr: "nacos-internal:8848"
   namespace: "" # 必须由 NACOS_NAMESPACE 注入
   service_name: "captcha-service"
-  group_name: "PROD_GROUP"
+  group_name: ""
   cluster_name: "prod-cluster"
   weight: 1.0
   metadata:

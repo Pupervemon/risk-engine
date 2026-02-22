@@ -63,6 +63,14 @@ func main() {
 	tokenService := captchaservice.NewTokenService(&cfg.Token)
 	grpcService := captchaservice.NewCaptchaTokenService(tokenService)
 
+	// 启动图片池刷新任务（如果启用）
+	if cfg.Captcha.ImagePool.Enabled {
+		logger.Info("启动图片池刷新任务...")
+		if err := captchaService.StartImageRefresh(context.Background()); err != nil {
+			logger.Error("启动图片池失败", zap.Error(err))
+		}
+	}
+
 	// 5. 初始化HTTP Handler
 	httpHandler := &httptransport.CaptchaHandler{
 		CaptchaService: captchaService,
@@ -140,15 +148,18 @@ func main() {
 
 	logger.Info("收到退出信号，开始优雅关闭...", zap.String("signal", sig.String()))
 
-	// 13. 从Nacos注销服务
+	// 13. 停止图片池刷新任务
+	captchaService.StopImageRefresh()
+
+	// 14. 从Nacos注销服务
 	if err := nacosRegistry.Deregister(); err != nil {
 		logger.Error("从Nacos注销服务失败", zap.Error(err))
 	}
 
-	// 14. 给一点时间让Nacos更新服务列表
+	// 15. 给一点时间让Nacos更新服务列表
 	time.Sleep(1 * time.Second)
 
-	// 15. 关闭HTTP服务器
+	// 16. 关闭HTTP服务器
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer shutdownCancel()
 	if err := httpServer.Shutdown(shutdownCtx); err != nil {
@@ -157,7 +168,7 @@ func main() {
 		logger.Info("HTTP服务器已关闭")
 	}
 
-	// 16. 关闭gRPC服务器
+	// 17. 关闭gRPC服务器
 	grpcServer.GracefulStop()
 	logger.Info("gRPC服务器已关闭")
 

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/joho/godotenv"
 	"github.com/spf13/viper"
@@ -11,12 +12,56 @@ import (
 
 // CaptchaConfigSpec 业务规则配置
 type CaptchaConfigSpec struct {
-	TTLSeconds      int `mapstructure:"ttl_seconds"`
-	Width           int `mapstructure:"width"`
-	Height          int `mapstructure:"height"`
-	GraphSizeMin    int `mapstructure:"graph_size_min"`
-	GraphSizeMax    int `mapstructure:"graph_size_max"`
-	SliderTolerance int `mapstructure:"slider_tolerance"`
+	TTLSeconds       int                    `mapstructure:"ttl_seconds"`
+	Width            int                    `mapstructure:"width"`
+	Height           int                    `mapstructure:"height"`
+	GraphSizeMin     int                    `mapstructure:"graph_size_min"`
+	GraphSizeMax     int                    `mapstructure:"graph_size_max"`
+	SliderTolerance  int                    `mapstructure:"slider_tolerance"`
+	ImagePool        ImagePoolConfig        `mapstructure:"image_pool"`
+	TrackValidation  TrackValidationConfig  `mapstructure:"track_validation"`
+	ExternalImageAPI ExternalImageAPIConfig `mapstructure:"external_image_api"`
+}
+
+// ImagePoolConfig 图片池配置
+type ImagePoolConfig struct {
+	Enabled                bool `mapstructure:"enabled"`
+	PoolSize               int  `mapstructure:"pool_size"`
+	RefreshIntervalMinutes int  `mapstructure:"refresh_interval_minutes"`
+}
+
+// TrackValidationConfig 轨迹校验配置
+type TrackValidationConfig struct {
+	Enabled        bool  `mapstructure:"enabled"`
+	MinPoints      int   `mapstructure:"min_points"`
+	MinDurationMs  int64 `mapstructure:"min_duration_ms"`
+	MaxDurationMs  int64 `mapstructure:"max_duration_ms"`
+	PointTolerance int   `mapstructure:"point_tolerance"`
+}
+
+// ExternalImageAPIConfig 外部图片API配置
+type ExternalImageAPIConfig struct {
+	URL                string `mapstructure:"url"`
+	APIKey             string `mapstructure:"api_key"`
+	TimeoutSeconds     int    `mapstructure:"timeout_seconds"`
+	RateLimitPerMinute int    `mapstructure:"rate_limit_per_minute"`
+	RetryCount         int    `mapstructure:"retry_count"`
+}
+
+// GetTimeout 获取超时时间
+func (c *ExternalImageAPIConfig) GetTimeout() time.Duration {
+	if c.TimeoutSeconds <= 0 {
+		return 30 * time.Second
+	}
+	return time.Duration(c.TimeoutSeconds) * time.Second
+}
+
+// GetRefreshInterval 获取刷新间隔
+func (c *ImagePoolConfig) GetRefreshInterval() time.Duration {
+	if c.RefreshIntervalMinutes <= 0 {
+		return 60 * time.Minute
+	}
+	return time.Duration(c.RefreshIntervalMinutes) * time.Minute
 }
 
 // TokenConfig Token配置
@@ -110,6 +155,10 @@ func (c *CaptchaConfig) Validate(env string) error {
 		if c.Token.Secret == "" || c.Token.Secret == "CHANGE_ME" {
 			return fmt.Errorf("[安全阻断] 生产环境 Token 密钥未设置或使用默认值")
 		}
+		// 生产环境如果启用外部图片API，必须配置URL
+		if c.Captcha.ImagePool.Enabled && c.Captcha.ExternalImageAPI.URL == "" {
+			return fmt.Errorf("[配置错误] 启用图片池但未配置外部图片API URL")
+		}
 	}
 	return nil
 }
@@ -154,6 +203,35 @@ func (c *CaptchaConfig) Print() {
 		fmt.Printf("Nacos: [禁用]\n")
 	}
 
+	fmt.Println("-------------------------------------")
+	fmt.Printf("图片池: %s\n", toggleStr(c.Captcha.ImagePool.Enabled))
+	if c.Captcha.ImagePool.Enabled {
+		fmt.Printf("  池大小: %d张\n", c.Captcha.ImagePool.PoolSize)
+		fmt.Printf("  刷新间隔: %d分钟\n", c.Captcha.ImagePool.RefreshIntervalMinutes)
+		apiURL := c.Captcha.ExternalImageAPI.URL
+		if apiURL == "" {
+			apiURL = "<未配置-将使用Mock图片>"
+		}
+		fmt.Printf("  图片API: %s\n", apiURL)
+	}
+
+	fmt.Println("-------------------------------------")
+	fmt.Printf("轨迹校验: %s\n", toggleStr(c.Captcha.TrackValidation.Enabled))
+	if c.Captcha.TrackValidation.Enabled {
+		fmt.Printf("  最小点数: %d\n", c.Captcha.TrackValidation.MinPoints)
+		fmt.Printf("  时长范围: %d-%dms\n",
+			c.Captcha.TrackValidation.MinDurationMs,
+			c.Captcha.TrackValidation.MaxDurationMs)
+	}
+
 	fmt.Println("=====================================")
 	fmt.Println()
+}
+
+// toggleStr 开关状态字符串
+func toggleStr(enabled bool) string {
+	if enabled {
+		return "启用"
+	}
+	return "[禁用]"
 }

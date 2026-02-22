@@ -185,7 +185,7 @@ func (nr *NacosRegistry) Deregister() error {
 	return nil
 }
 
-// UpdateHealth 更新服务健康状态（可选）
+// UpdateHealth 更新服务健康状态
 func (nr *NacosRegistry) UpdateHealth(healthy bool) error {
 	if !nr.config.Enable {
 		return nil

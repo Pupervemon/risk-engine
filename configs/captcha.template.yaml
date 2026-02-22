@@ -30,6 +30,30 @@ captcha:
   # 前端滑块坐标允许误差（像素）
   slider_tolerance: 8
 
+  # 图片池配置
+  image_pool:
+    enabled: false # 是否启用图片池
+    pool_size: 50 # 图片池大小
+    refresh_interval_minutes: 60 # 刷新间隔（分钟）
+
+  # 轨迹校验配置
+  track_validation:
+    enabled: false # 是否启用轨迹校验
+    min_points: 15 # 最小轨迹点数
+    min_duration_ms: 800 # 最小时长（毫秒）
+    max_duration_ms: 15000 # 最大时长（毫秒）
+    point_tolerance: 20 # 端点容差（像素）
+
+  # 外部图片API配置
+  external_image_api:
+    # 示例API: https://api.mtyqx.cn/api/random.php?return=json
+    # 备用API: https://api.mtyqx.cn/tapi/random.php?return=json
+    url: "" # 外部图片API URL（留空则使用Mock图片）
+    api_key: "" # API密钥（此API不需要认证，留空即可）
+    timeout_seconds: 30 # 超时时间（秒）
+    rate_limit_per_minute: 50 # 每分钟请求限制
+    retry_count: 3 # 重试次数
+
 # Token 配置
 token:
   ttl_seconds: 300

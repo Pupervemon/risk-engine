@@ -43,21 +43,6 @@ func NewRiskRouter(redisClient *redis.Client, logger *zap.Logger) *gin.Engine {
 		)
 	})
 
-	// CORS 中间件（用于支持跨域健康检查）
-	router.Use(func(c *gin.Context) {
-		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
-		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
-		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With")
-		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS, GET, PUT, DELETE")
-
-		if c.Request.Method == "OPTIONS" {
-			c.AbortWithStatus(204)
-			return
-		}
-
-		c.Next()
-	})
-
 	// 创建健康检查处理器
 	healthChecker := health.NewChecker(redisClient, logger)
 
