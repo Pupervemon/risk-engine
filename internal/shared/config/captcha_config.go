@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -125,6 +126,14 @@ func LoadCaptchaConfig(configPath string) (*CaptchaConfig, error) {
 	var cfg CaptchaConfig
 	if err := v.Unmarshal(&cfg); err != nil {
 		return nil, fmt.Errorf("解析配置结构失败: %w", err)
+	}
+
+	if cfg.Nacos.Enable {
+		if cfg.Nacos.Metadata == nil {
+			cfg.Nacos.Metadata = make(map[string]string)
+		}
+		// 1. 自动填入 gRPC 端口 (解决 Java 找不到服务的问题)
+		cfg.Nacos.Metadata["gRPC_port"] = strconv.Itoa(cfg.Grpc.Port)
 	}
 
 	// [7] 校验配置

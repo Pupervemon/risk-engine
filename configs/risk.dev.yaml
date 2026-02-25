@@ -42,9 +42,9 @@ nacos:
   service_name: "risk-service"
   group_name: "DEFAULT_GROUP"
   cluster_name: "dev-cluster"
+  register_ip: "" # 可选：手动指定注册到Nacos的IP（多网卡/容器环境建议配置）
   weight: 1.0
   metadata:
     version: "1.0.0"
     protocol: "grpc"
-    grpc-port: "9090"
     env: "dev"

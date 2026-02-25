@@ -69,11 +69,19 @@ func (s *RiskService) Check(ctx context.Context, req *pb.CheckRequest) (*pb.Chec
 
 // ReportEvent 核心上报逻辑 - 优先处理用户ID
 func (s *RiskService) ReportEvent(ctx context.Context, req *pb.ReportEventRequest) (*pb.ReportEventResponse, error) {
-	if !req.IsSuccess && req.Scene == pb.Scene_SCENE_LOGIN {
-		// 优先使用用户ID记录失败次数
-		if req.UserId != "" {
-			key := fmt.Sprintf("risk:fail_count:login:uid:%s", req.UserId)
+	if req.Scene == pb.Scene_SCENE_LOGIN && req.UserId != "" {
+		key := fmt.Sprintf("risk:fail_count:login:uid:%s", req.UserId)
 
+		if req.IsSuccess {
+			// 登录成功，删除失败计数
+			err := s.Rdb.Del(ctx, key).Err()
+			if err != nil {
+				s.Logger.Error("清除失败计数失败", zap.Error(err), zap.String("userId", req.UserId))
+			} else {
+				s.Logger.Info("登录成功，已清除失败计数", zap.String("userId", req.UserId))
+			}
+		} else {
+			// 登录失败，增加计数
 			// 使用 Pipeline 提高性能，减少网络往返
 			pipe := s.Rdb.Pipeline()
 			pipe.Incr(ctx, key)
@@ -90,12 +98,13 @@ func (s *RiskService) ReportEvent(ctx context.Context, req *pb.ReportEventReques
 		// TODO: 未来可扩展基于IP的上报逻辑
 		// if req.Ip != "" {
 		// 	ipKey := fmt.Sprintf("risk:fail_count:login:ip:%s", req.Ip)
-		// 	pipe := s.Rdb.Pipeline()
-		// 	pipe.Incr(ctx, ipKey)
-		// 	pipe.Expire(ctx, ipKey, time.Duration(s.Config.Login.FailCountExpireMinutes)*time.Minute)
-		// 	_, err := pipe.Exec(ctx)
-		// 	if err != nil {
-		// 		s.Logger.Error("上报事件 Redis 操作失败(IP)", zap.Error(err), zap.String("ip", req.Ip))
+		// 	if req.IsSuccess {
+		// 		s.Rdb.Del(ctx, ipKey)
+		// 	} else {
+		// 		pipe := s.Rdb.Pipeline()
+		// 		pipe.Incr(ctx, ipKey)
+		// 		pipe.Expire(ctx, ipKey, time.Duration(s.Config.Login.FailCountExpireMinutes)*time.Minute)
+		// 		pipe.Exec(ctx)
 		// 	}
 		// }
 	}

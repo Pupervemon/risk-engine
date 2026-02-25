@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/joho/godotenv"
@@ -65,7 +66,7 @@ func LoadRiskConfig(configPath string) (*RiskConfig, error) {
 
 	v := viper.New()
 
-	// [3] 开启自动环境变量映射 (核心优化)
+	// [3] 开启自动环境变量映射
 	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	v.AutomaticEnv()
 
@@ -92,6 +93,13 @@ func LoadRiskConfig(configPath string) (*RiskConfig, error) {
 		return nil, fmt.Errorf("解析配置结构失败: %w", err)
 	}
 
+	if cfg.Nacos.Enable {
+		if cfg.Nacos.Metadata == nil {
+			cfg.Nacos.Metadata = make(map[string]string)
+		}
+		// 1. 自动填入 gRPC 端口 (解决 Java 找不到服务的问题)
+		cfg.Nacos.Metadata["gRPC_port"] = strconv.Itoa(cfg.Grpc.Port)
+	}
 	// [7] 校验配置
 	if err := cfg.Validate(env); err != nil {
 		return nil, err
@@ -148,6 +156,7 @@ func (c *RiskConfig) Print() {
 		fmt.Printf("Nacos: 启用\n")
 		fmt.Printf("地址 : %s\n", c.Nacos.ServerAddr)
 		fmt.Printf("空间 : %s\n", ns)
+		fmt.Printf("元数据: %v\n", c.Nacos.Metadata)
 	} else {
 		fmt.Printf("Nacos: [禁用]\n")
 	}

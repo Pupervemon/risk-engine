@@ -29,7 +29,7 @@ captcha:
   # 图片池配置
   image_pool:
     enabled: true # 生产环境启用
-    pool_size: 50 # 生产环境适中即可
+    pool_size: 10 # 生产环境适中即可
     refresh_interval_minutes: 60 # 每小时刷新
 
   # 轨迹校验配置
@@ -58,8 +58,9 @@ nacos:
   server_addr: "nacos-internal:8848"
   namespace: "" # 必须由 NACOS_NAMESPACE 注入
   service_name: "captcha-service"
-  group_name: ""
+  group_name: "DEFAULT_GROUP"
   cluster_name: "prod-cluster"
+  register_ip: "" # 可选：手动指定注册到Nacos的IP（多网卡/容器环境建议配置）
   weight: 1.0
   metadata:
     version: "1.0.0"

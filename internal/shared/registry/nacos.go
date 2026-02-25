@@ -19,6 +19,7 @@ type NacosConfig struct {
 	ServiceName string            // 服务名称
 	GroupName   string            // 分组名称
 	ClusterName string            // 集群名称
+	RegisterIP  string            // 指定注册IP（可选，优先于自动探测）
 	Weight      float64           // 服务权重
 	Enable      bool              // 是否启用Nacos
 	Metadata    map[string]string // 服务元数据
@@ -93,10 +94,10 @@ func NewNacosRegistry(config *NacosConfig, logger *zap.Logger) (*NacosRegistry, 
 		return nil, fmt.Errorf("创建Nacos客户端失败: %w", err)
 	}
 
-	// 获取本地IP地址
-	localIP, err := getLocalIP()
+	// 获取注册IP地址：配置优先，其次自动探测
+	localIP, err := resolveRegisterIP(config.RegisterIP)
 	if err != nil {
-		return nil, fmt.Errorf("获取本地IP失败: %w", err)
+		return nil, err
 	}
 
 	logger.Info("Nacos注册中心初始化成功",
@@ -111,6 +112,23 @@ func NewNacosRegistry(config *NacosConfig, logger *zap.Logger) (*NacosRegistry, 
 		localIP:     localIP,
 		isEphemeral: true, // 默认使用临时实例
 	}, nil
+}
+
+func resolveRegisterIP(overrideIP string) (string, error) {
+	if overrideIP != "" {
+		parsed := net.ParseIP(overrideIP)
+		if parsed == nil || parsed.To4() == nil {
+			return "", fmt.Errorf("配置的 register_ip 无效: %s", overrideIP)
+		}
+		return parsed.String(), nil
+	}
+
+	ip, err := getLocalIP()
+	if err != nil {
+		return "", fmt.Errorf("获取本地IP失败: %w", err)
+	}
+
+	return ip, nil
 }
 
 // Register 注册服务到Nacos

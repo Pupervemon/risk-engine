@@ -29,6 +29,7 @@ type NacosConfig struct {
 	ServiceName string            `mapstructure:"service_name"`
 	GroupName   string            `mapstructure:"group_name"`
 	ClusterName string            `mapstructure:"cluster_name"`
+	RegisterIP  string            `mapstructure:"register_ip"`
 	Weight      float64           `mapstructure:"weight"`
 	Metadata    map[string]string `mapstructure:"metadata"`
 }

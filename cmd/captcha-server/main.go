@@ -108,6 +108,7 @@ func main() {
 		ServiceName: cfg.Nacos.ServiceName,
 		GroupName:   cfg.Nacos.GroupName,
 		ClusterName: cfg.Nacos.ClusterName,
+		RegisterIP:  cfg.Nacos.RegisterIP,
 		Weight:      cfg.Nacos.Weight,
 		Enable:      cfg.Nacos.Enable,
 		Metadata:    cfg.Nacos.Metadata,

@@ -67,6 +67,7 @@ nacos:
   service_name: "captcha-service" # 服务名称（用于服务发现）
   group_name: "DEFAULT_GROUP" # 服务分组
   cluster_name: "DEFAULT" # 集群名称
+  register_ip: "" # 可选：手动指定注册到Nacos的IP（留空则自动探测）
   weight: 1.0 # 服务权重（用于负载均衡）
   metadata: # 服务元数据
     version: "1.0.0"

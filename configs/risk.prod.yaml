@@ -40,11 +40,11 @@ nacos:
   server_addr: "nacos-internal:8848"
   namespace: "" # 必须由 NACOS_NAMESPACE 注入
   service_name: "risk-service"
-  group_name: "PROD_GROUP"
+  group_name: "DEFAULT_GROUP"
   cluster_name: "prod-cluster"
+  register_ip: "" # 可选：手动指定注册到Nacos的IP（多网卡/容器环境建议配置）
   weight: 1.0
   metadata:
     version: "1.0.0"
     protocol: "grpc"
-    grpc-port: "9090"
     env: "prod"
