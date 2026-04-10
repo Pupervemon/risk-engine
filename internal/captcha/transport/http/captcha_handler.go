@@ -96,7 +96,7 @@ func (h *CaptchaHandler) VerifyCaptcha(c *gin.Context) {
 
 	h.Logger.Info("验证码校验通过", zap.String("captchaId", req.CaptchaID))
 
-	token, exp, err := h.TokenService.IssueToken(req.CaptchaID)
+	token, exp, err := h.TokenService.IssueToken(c.Request.Context(), req.CaptchaID)
 	if err != nil {
 		h.Logger.Error("签发 token 失败", zap.Error(err))
 		writeJSON(c, http.StatusInternalServerError, errorResponse{Error: "TOKEN_ISSUE_FAILED", Reason: "INTERNAL_ERROR"})

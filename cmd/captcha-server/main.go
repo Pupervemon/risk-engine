@@ -60,7 +60,7 @@ func main() {
 
 	// 4. 初始化服务
 	captchaService := captchaservice.NewCaptchaService(rdb, &cfg.Captcha, logger)
-	tokenService := captchaservice.NewTokenService(&cfg.Token)
+	tokenService := captchaservice.NewTokenService(rdb, &cfg.Token)
 	grpcService := captchaservice.NewCaptchaTokenService(tokenService)
 
 	// 启动图片池刷新任务（如果启用）

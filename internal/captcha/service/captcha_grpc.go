@@ -20,6 +20,6 @@ func (s *CaptchaTokenService) VerifyToken(ctx context.Context, req *captchapb.Ve
 		return &captchapb.VerifyTokenResponse{Valid: false, Reason: "TOKEN_EMPTY", ExpiresAt: 0}, nil
 	}
 
-	valid, reason, exp := s.TokenService.VerifyToken(req.Token)
+	valid, reason, exp := s.TokenService.VerifyToken(ctx, req.Token)
 	return &captchapb.VerifyTokenResponse{Valid: valid, Reason: reason, ExpiresAt: exp}, nil
 }

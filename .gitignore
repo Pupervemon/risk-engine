@@ -122,3 +122,5 @@ yarn-error.log*
 !/configs/risk.prod.yaml
 !/configs/captcha.dev.yaml
 !/configs/captcha.prod.yaml
+
+.gocache/

@@ -31,6 +31,7 @@ type CaptchaService struct {
 	useImagePool   bool            // 是否使用图片池
 }
 
+// SliderChallenge 是前端需要渲染和提交的滑块验证码数据。
 type SliderChallenge struct {
 	CaptchaID         string
 	MasterImage       string
@@ -40,11 +41,13 @@ type SliderChallenge struct {
 	RequireMouseTrack bool // 是否需要鼠标轨迹
 }
 
+// sliderAnswer 保存验证码的正确坐标答案。
 type sliderAnswer struct {
 	DX int `json:"dx"`
 	DY int `json:"dy"`
 }
 
+// NewCaptchaService 初始化验证码服务，并按配置准备背景图、图片池和轨迹校验器。
 func NewCaptchaService(rdb *redis.Client, cfg *config.CaptchaConfigSpec, logger *zap.Logger) *CaptchaService {
 	ttl := time.Duration(cfg.TTLSeconds) * time.Second
 	if cfg.TTLSeconds <= 0 {
@@ -124,6 +127,7 @@ func NewCaptchaService(rdb *redis.Client, cfg *config.CaptchaConfigSpec, logger 
 	return service
 }
 
+// Generate 生成一组新的滑块验证码数据，并把正确答案写入 Redis。
 func (s *CaptchaService) Generate(ctx context.Context) (*SliderChallenge, error) {
 	// 如果启用图片池，尝试从图片池获取背景图
 	if s.useImagePool && s.imagePool != nil {
@@ -196,6 +200,7 @@ func (s *CaptchaService) Generate(ctx context.Context) (*SliderChallenge, error)
 	}, nil
 }
 
+// Verify 校验滑块位置是否正确。
 func (s *CaptchaService) Verify(ctx context.Context, captchaID string, pointX, pointY int) (bool, string, error) {
 	if captchaID == "" {
 		return false, "CAPTCHA_ID_EMPTY", nil
@@ -278,10 +283,12 @@ func (s *CaptchaService) VerifyWithTrack(ctx context.Context, captchaID string, 
 	return true, "OK", nil
 }
 
+// answerKey 统一生成 Redis 中验证码答案的 key。
 func (s *CaptchaService) answerKey(captchaID string) string {
 	return fmt.Sprintf("captcha:slide:%s", captchaID)
 }
 
+// saveAnswer 将正确答案序列化后存入 Redis，并设置过期时间。
 func (s *CaptchaService) saveAnswer(ctx context.Context, captchaID string, answer sliderAnswer) error {
 	payload, err := json.Marshal(answer)
 	if err != nil {
@@ -290,6 +297,7 @@ func (s *CaptchaService) saveAnswer(ctx context.Context, captchaID string, answe
 	return s.rdb.Set(ctx, s.answerKey(captchaID), payload, s.ttl).Err()
 }
 
+// loadAnswer 从 Redis 读取验证码答案。
 func (s *CaptchaService) loadAnswer(ctx context.Context, captchaID string) (*sliderAnswer, error) {
 	value, err := s.rdb.Get(ctx, s.answerKey(captchaID)).Bytes()
 	if err != nil {
@@ -302,10 +310,12 @@ func (s *CaptchaService) loadAnswer(ctx context.Context, captchaID string) (*sli
 	return &answer, nil
 }
 
+// deleteAnswer 删除已使用或失效的验证码答案。
 func (s *CaptchaService) deleteAnswer(ctx context.Context, captchaID string) error {
 	return s.rdb.Del(ctx, s.answerKey(captchaID)).Err()
 }
 
+// randomHex 生成指定长度的随机十六进制字符串。
 func randomHex(n int) (string, error) {
 	buf := make([]byte, n)
 	if _, err := rand.Read(buf); err != nil {
@@ -314,6 +324,7 @@ func randomHex(n int) (string, error) {
 	return hex.EncodeToString(buf), nil
 }
 
+// defaultBackgrounds 提供内置的默认背景图。
 func defaultBackgrounds(width, height int) []image.Image {
 	bg1 := image.NewRGBA(image.Rect(0, 0, width, height))
 	draw.Draw(bg1, bg1.Bounds(), &image.Uniform{C: color.RGBA{R: 245, G: 248, B: 255, A: 255}}, image.Point{}, draw.Src)
@@ -327,6 +338,7 @@ func defaultBackgrounds(width, height int) []image.Image {
 	return []image.Image{bg1, bg2, bg3}
 }
 
+// defaultGraphImages 提供滑块拼图所需的遮罩、描边和阴影资源。
 func defaultGraphImages(size int) []*slide.GraphImage {
 	rect := image.Rect(0, 0, size, size)
 
