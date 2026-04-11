@@ -15,6 +15,7 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
+// tokenStorage 定义 Token 的持久化存储接口。
 type tokenStorage interface {
 	Set(ctx context.Context, key string, value []byte, expiration time.Duration) error
 	Exists(ctx context.Context, key string) (bool, error)
@@ -43,7 +44,7 @@ func (s *redisTokenStorage) Exists(ctx context.Context, key string) (bool, error
 	return count > 0, nil
 }
 
-// TokenService issues signed tokens and persists their presence in Redis.
+// TokenService 负责签发带签名的 Token，并将其状态同步到 Redis 中。
 type TokenService struct {
 	cfg    *config.TokenConfig
 	secret []byte
@@ -56,6 +57,7 @@ type tokenPayload struct {
 	ExpiresAt int64  `json:"exp"`
 }
 
+// NewTokenService 初始化 Token 服务。
 func NewTokenService(rdb *redis.Client, cfg *config.TokenConfig) *TokenService {
 	return newTokenServiceWithStore(cfg, newRedisTokenStorage(rdb))
 }
@@ -68,6 +70,7 @@ func newTokenServiceWithStore(cfg *config.TokenConfig, store tokenStorage) *Toke
 	}
 }
 
+// IssueToken 生成一个新的签名 Token，并将其摘要存入 Redis。
 func (s *TokenService) IssueToken(ctx context.Context, captchaID string) (string, int64, error) {
 	if s.store == nil {
 		return "", 0, fmt.Errorf("token store is not configured")
@@ -96,6 +99,7 @@ func (s *TokenService) IssueToken(ctx context.Context, captchaID string) (string
 	return token, payload.ExpiresAt, nil
 }
 
+// VerifyToken 验证 Token 的签名、有效期以及 Redis 中是否存在对应的记录。
 func (s *TokenService) VerifyToken(ctx context.Context, token string) (bool, string, int64) {
 	parts := strings.Split(token, ".")
 	if len(parts) != 2 {
@@ -138,6 +142,7 @@ func (s *TokenService) VerifyToken(ctx context.Context, token string) (bool, str
 	return true, "OK", payload.ExpiresAt
 }
 
+// tokenKey 生成用于 Redis 存储的 Token 唯一键（使用 SHA256 摘要）。
 func (s *TokenService) tokenKey(token string) string {
 	sum := sha256.Sum256([]byte(token))
 	return fmt.Sprintf("captcha:token:%s", hex.EncodeToString(sum[:]))
@@ -150,8 +155,10 @@ func (s *TokenService) tokenTTL() time.Duration {
 	return time.Duration(s.cfg.TTLSeconds) * time.Second
 }
 
+// sign 使用 HMAC-SHA256 对数据进行签名。
 func (s *TokenService) sign(payloadB64 string) string {
 	mac := hmac.New(sha256.New, s.secret)
 	mac.Write([]byte(payloadB64))
 	return base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
 }
+

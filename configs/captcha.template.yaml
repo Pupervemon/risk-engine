@@ -1,6 +1,6 @@
 # ===============================================================
 # Captcha Service - Configuration Template
-# 配置文件模板，用于参考和快速部署
+# Example values for deployment and local adaptation.
 # ===============================================================
 
 http:
@@ -10,9 +10,8 @@ grpc:
   port: 9091
 
 redis:
-  # 服务器地址 (例如: "127.0.0.1:6379")
   addr: "YOUR_REDIS_IP:6379"
-  # 密码 (生产环境请务必修改)
+  # Env override: CAPTCHA_REDIS_PASSWORD
   password: "YOUR_REDIS_PASSWORD"
   db: 2
   pool_size: 50
@@ -24,52 +23,47 @@ captcha:
   ttl_seconds: 120
   width: 320
   height: 180
-  # 滑块拼图块尺寸范围
   graph_size_min: 52
   graph_size_max: 64
-  # 前端滑块坐标允许误差（像素）
   slider_tolerance: 8
 
-  # 图片池配置
   image_pool:
-    enabled: false # 是否启用图片池
-    pool_size: 50 # 图片池大小
-    refresh_interval_minutes: 60 # 刷新间隔（分钟）
+    enabled: false
+    pool_size: 50
+    refresh_interval_minutes: 60
 
-  # 轨迹校验配置
   track_validation:
-    enabled: false # 是否启用轨迹校验
-    min_points: 15 # 最小轨迹点数
-    min_duration_ms: 800 # 最小时长（毫秒）
-    max_duration_ms: 15000 # 最大时长（毫秒）
-    point_tolerance: 20 # 端点容差（像素）
+    enabled: false
+    min_points: 15
+    min_duration_ms: 800
+    max_duration_ms: 15000
+    point_tolerance: 20
 
-  # 外部图片API配置
   external_image_api:
-    # 示例API: https://api.mtyqx.cn/api/random.php?return=json
-    # 备用API: https://api.mtyqx.cn/tapi/random.php?return=json
-    url: "" # 外部图片API URL（留空则使用Mock图片）
-    api_key: "" # API密钥（此API不需要认证，留空即可）
-    timeout_seconds: 30 # 超时时间（秒）
-    rate_limit_per_minute: 50 # 每分钟请求限制
-    retry_count: 3 # 重试次数
+    # Env override: CAPTCHA_CAPTCHA_EXTERNAL_IMAGE_API_URL
+    url: ""
+    # Env override: CAPTCHA_CAPTCHA_EXTERNAL_IMAGE_API_API_KEY
+    api_key: ""
+    timeout_seconds: 30
+    rate_limit_per_minute: 50
+    retry_count: 3
 
-# Token 配置
 token:
   ttl_seconds: 300
-  secret: "YOUR_TOKEN_SECRET" # 必须通过 TOKEN_SECRET 环境变量设置
+  # Env override: CAPTCHA_TOKEN_SECRET
+  secret: "YOUR_TOKEN_SECRET"
 
-# Nacos服务注册配置
 nacos:
-  enable: true # 是否启用Nacos服务注册
-  server_addr: "YOUR_NACOS_IP:8848" # Nacos服务器地址
-  namespace: "" # 命名空间（空字符串表示public命名空间）
-  service_name: "captcha-service" # 服务名称（用于服务发现）
-  group_name: "DEFAULT_GROUP" # 服务分组
-  cluster_name: "DEFAULT" # 集群名称
-  register_ip: "" # 可选：手动指定注册到Nacos的IP（留空则自动探测）
-  weight: 1.0 # 服务权重（用于负载均衡）
-  metadata: # 服务元数据
+  enable: true
+  server_addr: "YOUR_NACOS_IP:8848"
+  # Env override: CAPTCHA_REGISTRY_NACOS_NAMESPACE
+  namespace: ""
+  service_name: "captcha-service"
+  group_name: "DEFAULT_GROUP"
+  cluster_name: "DEFAULT"
+  register_ip: ""
+  weight: 1.0
+  metadata:
     version: "1.0.0"
     protocol: "http"
     context-path: "/api/v1"

@@ -1,17 +1,18 @@
 # ===============================================================
 # Captcha Service - Production Profile
-# 生产环境配置，敏感信息依赖环境变量注入
+# Sensitive values should be injected by prefixed env vars.
 # ===============================================================
 
 http:
-  port: 8091 # 生产环境通常用标准端口
+  port: 8091
 
 grpc:
   port: 9091
 
 redis:
-  addr: "redis-internal:6379" # 内部域名
-  password: "" # 必须由 REDIS_PASSWORD 注入，否则 Validate 会报错
+  addr: "redis-internal:6379"
+  # Env override: CAPTCHA_REDIS_PASSWORD
+  password: ""
   db: 2
   pool_size: 100
   dial_timeout_seconds: 5
@@ -19,48 +20,48 @@ redis:
   write_timeout_seconds: 2
 
 captcha:
-  ttl_seconds: 120 # 生产环境有效期较短
+  ttl_seconds: 120
   width: 320
   height: 180
   graph_size_min: 52
   graph_size_max: 64
-  slider_tolerance: 3 # 生产环境容差更严格
+  slider_tolerance: 3
 
-  # 图片池配置
   image_pool:
-    enabled: true # 生产环境启用
-    pool_size: 10 # 生产环境适中即可
-    refresh_interval_minutes: 60 # 每小时刷新
+    enabled: true
+    pool_size: 10
+    refresh_interval_minutes: 60
 
-  # 轨迹校验配置
   track_validation:
-    enabled: true # 生产环境启用
-    min_points: 15 # 最少15个轨迹点
-    min_duration_ms: 800 # 最少800ms
-    max_duration_ms: 15000 # 最多15秒
-    point_tolerance: 20 # 端点容差（像素）
+    enabled: true
+    min_points: 15
+    min_duration_ms: 800
+    max_duration_ms: 15000
+    point_tolerance: 20
 
-  # 外部图片API配置
   external_image_api:
-    url: "" # 必须通过环境变量 CAPTCHA_EXTERNAL_IMAGE_API_URL 注入
-    api_key: "" # 必须通过环境变量 CAPTCHA_EXTERNAL_IMAGE_API_API_KEY 注入
+    # Env override: CAPTCHA_CAPTCHA_EXTERNAL_IMAGE_API_URL
+    url: ""
+    # Env override: CAPTCHA_CAPTCHA_EXTERNAL_IMAGE_API_API_KEY
+    api_key: ""
     timeout_seconds: 30
-    rate_limit_per_minute: 50 # 生产环境注意速率限制
+    rate_limit_per_minute: 50
     retry_count: 3
 
-# Token 配置（生产环境）
 token:
   ttl_seconds: 300
-  secret: "" # 必须由 TOKEN_SECRET 环境变量注入，否则 Validate 会报错
+  # Env override: CAPTCHA_TOKEN_SECRET
+  secret: ""
 
 nacos:
   enable: true
   server_addr: "nacos-internal:8848"
-  namespace: "" # 必须由 NACOS_NAMESPACE 注入
+  # Env override: CAPTCHA_REGISTRY_NACOS_NAMESPACE
+  namespace: ""
   service_name: "captcha-service"
   group_name: "DEFAULT_GROUP"
   cluster_name: "prod-cluster"
-  register_ip: "" # 可选：手动指定注册到Nacos的IP（多网卡/容器环境建议配置）
+  register_ip: ""
   weight: 1.0
   metadata:
     version: "1.0.0"

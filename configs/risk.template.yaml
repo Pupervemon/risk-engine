@@ -1,18 +1,17 @@
 # ===============================================================
 # Risk Service - Configuration Template
-# 配置文件模板，用于参考和快速部署
+# Example values for deployment and local adaptation.
 # ===============================================================
 
 http:
-  port: 9080 # HTTP健康检查端口
+  port: 9080
 
 grpc:
   port: 9090
 
 redis:
-  # 服务器地址 (例如: "127.0.0.1:6379")
   addr: "YOUR_REDIS_IP:6379"
-  # 密码 (生产环境请务必修改)
+  # Env override: RISK_REDIS_PASSWORD
   password: "YOUR_REDIS_PASSWORD"
   db: 1
   pool_size: 100
@@ -20,35 +19,32 @@ redis:
   read_timeout_seconds: 3
   write_timeout_seconds: 3
 
-# 风控业务规则配置
 risk_rules:
   login:
-    max_fail_count: 5 # 登录失败触发验证的阈值
-    fail_count_expire_minutes: 30 # 失败计数窗口时间（分钟）
+    max_fail_count: 5
+    fail_count_expire_minutes: 30
   ip_rate_limit:
-    limit: 100 # 每秒最大请求数
+    limit: 100
     window_seconds: 1
   user_rate_limit:
-    # 刚才新增的 OnlineSelfTest 接口限流
     online_self_test:
       limit: 1
       window_seconds: 5
-    # 刚才新增的 JudgeSubmission 接口限流
     judge_submission:
       limit: 1
       window_seconds: 10
 
-# Nacos服务注册配置
 nacos:
-  enable: true # 是否启用Nacos服务注册
-  server_addr: "YOUR_NACOS_IP:8848" # Nacos服务器地址
-  namespace: "" # 命名空间（空字符串表示public命名空间）
-  service_name: "risk-service" # 服务名称（用于服务发现）
-  group_name: "DEFAULT_GROUP" # 服务分组
-  cluster_name: "DEFAULT" # 集群名称
-  register_ip: "" # 可选：手动指定注册到Nacos的IP（留空则自动探测）
-  weight: 1.0 # 服务权重（用于负载均衡）
-  metadata: # 服务元数据
+  enable: true
+  server_addr: "YOUR_NACOS_IP:8848"
+  # Env override: RISK_REGISTRY_NACOS_NAMESPACE
+  namespace: ""
+  service_name: "risk-service"
+  group_name: "DEFAULT_GROUP"
+  cluster_name: "DEFAULT"
+  register_ip: ""
+  weight: 1.0
+  metadata:
     version: "1.0.0"
     protocol: "grpc"
     env: "prod"

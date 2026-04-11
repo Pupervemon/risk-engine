@@ -1,24 +1,24 @@
 # ===============================================================
 # Risk Service - Production Profile
-# 生产环境配置，敏感信息依赖环境变量注入
+# Sensitive values should be injected by prefixed env vars.
 # ===============================================================
 
 http:
-  port: 9080 # HTTP健康检查端口
+  port: 9080
 
 grpc:
   port: 9090
 
 redis:
-  addr: "redis-internal:6379" # 内部域名
-  password: "" # 必须由 REDIS_PASSWORD 注入，否则 Validate 会报错
+  addr: "redis-internal:6379"
+  # Env override: RISK_REDIS_PASSWORD
+  password: ""
   db: 1
   pool_size: 100
   dial_timeout_seconds: 5
   read_timeout_seconds: 2
   write_timeout_seconds: 2
 
-# 风控业务规则配置（生产环境）
 risk_rules:
   login:
     max_fail_count: 5
@@ -34,15 +34,15 @@ risk_rules:
       limit: 1
       window_seconds: 10
 
-# Nacos服务注册配置
 nacos:
   enable: true
   server_addr: "nacos-internal:8848"
-  namespace: "" # 必须由 NACOS_NAMESPACE 注入
+  # Env override: RISK_REGISTRY_NACOS_NAMESPACE
+  namespace: ""
   service_name: "risk-service"
   group_name: "DEFAULT_GROUP"
   cluster_name: "prod-cluster"
-  register_ip: "" # 可选：手动指定注册到Nacos的IP（多网卡/容器环境建议配置）
+  register_ip: ""
   weight: 1.0
   metadata:
     version: "1.0.0"

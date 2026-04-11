@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"net"
 	"net/http"
@@ -22,23 +23,27 @@ import (
 )
 
 func main() {
+	configFile := flag.String("config", "", "path to config file")
+	configEnv := flag.String("env", "", "app environment override")
+	flag.Parse()
 
-	// 1. 加载配置
-	cfg, err := config.LoadCaptchaConfig("configs")
+	cfg, err := config.LoadCaptchaConfigWithOptions(config.LoadOptions{
+		ConfigPath: "configs",
+		ConfigFile: *configFile,
+		Env:        *configEnv,
+	})
 	if err != nil {
-		panic(fmt.Sprintf("无法加载配置: %v", err))
+		panic(fmt.Sprintf("failed to load config: %v", err))
 	}
 
-	// 2. 初始化日志
 	logger, _ := zap.NewProduction()
 	defer logger.Sync()
 
-	logger.Info("Captcha服务启动中...",
+	logger.Info("starting captcha service",
 		zap.Int("http_port", cfg.HTTP.Port),
 		zap.Int("grpc_port", cfg.Grpc.Port),
 		zap.Bool("nacos_enabled", cfg.Nacos.Enable))
 
-	// 3. 初始化Redis连接
 	rdb := redis.NewClient(&redis.Options{
 		Addr:         cfg.Redis.Addr,
 		Password:     cfg.Redis.Password,
@@ -50,28 +55,24 @@ func main() {
 	})
 	defer rdb.Close()
 
-	// 测试Redis连接
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if _, err := rdb.Ping(ctx).Result(); err != nil {
-		logger.Fatal("Redis 连接失败", zap.Error(err))
+		logger.Fatal("failed to connect redis", zap.Error(err))
 	}
-	logger.Info("Redis 连接成功")
+	logger.Info("redis connected")
 
-	// 4. 初始化服务
 	captchaService := captchaservice.NewCaptchaService(rdb, &cfg.Captcha, logger)
 	tokenService := captchaservice.NewTokenService(rdb, &cfg.Token)
 	grpcService := captchaservice.NewCaptchaTokenService(tokenService)
 
-	// 启动图片池刷新任务（如果启用）
 	if cfg.Captcha.ImagePool.Enabled {
-		logger.Info("启动图片池刷新任务...")
+		logger.Info("starting image pool refresh job")
 		if err := captchaService.StartImageRefresh(context.Background()); err != nil {
-			logger.Error("启动图片池失败", zap.Error(err))
+			logger.Error("failed to start image pool refresh job", zap.Error(err))
 		}
 	}
 
-	// 5. 初始化HTTP Handler
 	httpHandler := &httptransport.CaptchaHandler{
 		CaptchaService: captchaService,
 		TokenService:   tokenService,
@@ -79,10 +80,8 @@ func main() {
 	}
 
 	healthHandler := httptransport.NewHealthHandler(rdb, logger)
-
 	router := httptransport.NewCaptchaRouter(httpHandler, healthHandler)
 
-	// 6. 初始化HTTP服务器
 	httpServer := &http.Server{
 		Addr:         fmt.Sprintf(":%d", cfg.HTTP.Port),
 		Handler:      router,
@@ -91,17 +90,15 @@ func main() {
 		IdleTimeout:  60 * time.Second,
 	}
 
-	// 7. 初始化gRPC服务器
 	grpcListener, err := net.Listen("tcp", fmt.Sprintf(":%d", cfg.Grpc.Port))
 	if err != nil {
-		logger.Fatal("gRPC 监听失败", zap.Error(err))
+		logger.Fatal("failed to listen grpc", zap.Error(err))
 	}
 
 	grpcServer := grpc.NewServer(grpc.UnaryInterceptor(UnaryLoggerInterceptor(logger)))
 	captchapb.RegisterCaptchaTokenServiceServer(grpcServer, grpcService)
 	reflection.Register(grpcServer)
 
-	// 8. 初始化Nacos注册中心
 	nacosRegistry, err := registry.NewNacosRegistry(&registry.NacosConfig{
 		ServerAddr:  cfg.Nacos.ServerAddr,
 		Namespace:   cfg.Nacos.Namespace,
@@ -117,63 +114,53 @@ func main() {
 		HealthCheck: true,
 	}, logger)
 	if err != nil {
-		logger.Fatal("初始化Nacos注册中心失败", zap.Error(err))
+		logger.Fatal("failed to initialize nacos registry", zap.Error(err))
 	}
 
-	// 9. 启动HTTP服务
 	go func() {
-		logger.Info("Captcha HTTP 服务启动", zap.Int("port", cfg.HTTP.Port))
+		logger.Info("captcha http server listening", zap.Int("port", cfg.HTTP.Port))
 		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			logger.Error("HTTP 服务异常退出", zap.Error(err))
+			logger.Error("http server exited unexpectedly", zap.Error(err))
 		}
 	}()
 
-	// 10. 启动gRPC服务
 	go func() {
-		logger.Info("Captcha gRPC 服务启动", zap.Int("port", cfg.Grpc.Port))
+		logger.Info("captcha grpc server listening", zap.Int("port", cfg.Grpc.Port))
 		if err := grpcServer.Serve(grpcListener); err != nil {
-			logger.Error("gRPC 服务异常退出", zap.Error(err))
+			logger.Error("grpc server exited unexpectedly", zap.Error(err))
 		}
 	}()
 
-	// 11. 等待服务完全启动后注册到Nacos
 	time.Sleep(2 * time.Second)
 	if err := nacosRegistry.Register(); err != nil {
-		logger.Error("注册到Nacos失败", zap.Error(err))
+		logger.Error("failed to register nacos service", zap.Error(err))
 	}
 
-	// 12. 优雅关闭处理
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	sig := <-quit
 
-	logger.Info("收到退出信号，开始优雅关闭...", zap.String("signal", sig.String()))
+	logger.Info("received shutdown signal", zap.String("signal", sig.String()))
 
-	// 13. 停止图片池刷新任务
 	captchaService.StopImageRefresh()
 
-	// 14. 从Nacos注销服务
 	if err := nacosRegistry.Deregister(); err != nil {
-		logger.Error("从Nacos注销服务失败", zap.Error(err))
+		logger.Error("failed to deregister nacos service", zap.Error(err))
 	}
 
-	// 15. 给一点时间让Nacos更新服务列表
 	time.Sleep(1 * time.Second)
 
-	// 16. 关闭HTTP服务器
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer shutdownCancel()
 	if err := httpServer.Shutdown(shutdownCtx); err != nil {
-		logger.Error("HTTP服务器关闭失败", zap.Error(err))
+		logger.Error("failed to shutdown http server", zap.Error(err))
 	} else {
-		logger.Info("HTTP服务器已关闭")
+		logger.Info("http server closed")
 	}
 
-	// 17. 关闭gRPC服务器
 	grpcServer.GracefulStop()
-	logger.Info("gRPC服务器已关闭")
-
-	logger.Info("Captcha服务已完全关闭")
+	logger.Info("grpc server closed")
+	logger.Info("captcha service stopped")
 }
 
 func UnaryLoggerInterceptor(logger *zap.Logger) grpc.UnaryServerInterceptor {
@@ -188,11 +175,11 @@ func UnaryLoggerInterceptor(logger *zap.Logger) grpc.UnaryServerInterceptor {
 		}
 
 		if err != nil {
-			logger.Error("RPC 请求失败", append(fields, zap.Error(err))...)
+			logger.Error("rpc request failed", append(fields, zap.Error(err))...)
 			return resp, err
 		}
 
-		logger.Info("RPC 请求成功", fields...)
+		logger.Info("rpc request succeeded", fields...)
 		return resp, nil
 	}
 }

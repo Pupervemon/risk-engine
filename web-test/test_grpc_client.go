@@ -2,9 +2,9 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"log"
-	"os"
 	"time"
 
 	captchapb "github.com/Pupervemon/risk-proto/gen/go/captcha/v1"
@@ -13,15 +13,16 @@ import (
 )
 
 func main() {
-	if len(os.Args) < 2 {
-		fmt.Println("Usage: go run test_grpc_client.go <TOKEN>")
+	addr := flag.String("addr", "localhost:9091", "captcha gRPC server address")
+	flag.Parse()
+
+	if flag.NArg() < 1 {
+		fmt.Println("Usage: go run test_grpc_client.go [-addr host:port] <TOKEN>")
 		return
 	}
-	token := os.Args[1]
+	token := flag.Arg(0)
 
-	// Connect to gRPC service (default port 9091)
-	addr := "localhost:9091"
-	conn, err := grpc.Dial(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.Dial(*addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		log.Fatalf("Failed to connect: %v", err)
 	}

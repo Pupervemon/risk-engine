@@ -1,10 +1,10 @@
 # ===============================================================
-# Risk Service - Development Profile (Local Default)
-# 这里的配置作为"保底"，会被 .env 或系统环境变量自动覆盖
+# Risk Service - Development Profile
+# Local defaults. Runtime values may be overridden by .env or env vars.
 # ===============================================================
 
 http:
-  port: 9080 # HTTP健康检查端口
+  port: 9080
 
 grpc:
   port: 9090
@@ -13,36 +13,35 @@ redis:
   addr: "127.0.0.1:6379"
   password: ""
   db: 1
-  pool_size: 50 # 开发环境连接池
+  pool_size: 50
   dial_timeout_seconds: 5
   read_timeout_seconds: 3
   write_timeout_seconds: 3
 
-# 风控业务规则配置（这些通常在不同环境有不同数值，但不属于秘密）
 risk_rules:
   login:
-    max_fail_count: 3 # 开发环境更宽松的限制，便于测试
-    fail_count_expire_minutes: 10 # 更短的过期时间
+    max_fail_count: 3
+    fail_count_expire_minutes: 10
   ip_rate_limit:
-    limit: 1000 # 开发环境更宽松
+    limit: 1000
     window_seconds: 1
   user_rate_limit:
     online_self_test:
-      limit: 10 # 开发环境更宽松
+      limit: 10
       window_seconds: 5
     judge_submission:
-      limit: 10 # 开发环境更宽松
+      limit: 10
       window_seconds: 10
 
-# Nacos服务注册配置
 nacos:
   enable: false
   server_addr: "127.0.0.1:8848"
-  namespace: "" # 环境变量 NACOS_NAMESPACE 为空时使用此默认值
+  # Env override: RISK_REGISTRY_NACOS_NAMESPACE
+  namespace: ""
   service_name: "risk-service"
   group_name: "DEFAULT_GROUP"
   cluster_name: "dev-cluster"
-  register_ip: "" # 可选：手动指定注册到Nacos的IP（多网卡/容器环境建议配置）
+  register_ip: ""
   weight: 1.0
   metadata:
     version: "1.0.0"

@@ -2,170 +2,97 @@ package config
 
 import (
 	"fmt"
-	"os"
 	"strconv"
-	"strings"
-
-	"github.com/joho/godotenv"
-	"github.com/spf13/viper"
 )
 
-// RiskConfig Risk服务总配置
+// RiskConfig 是风控服务的完整运行时配置树。
 type RiskConfig struct {
-	HTTP      HTTPConfig      `mapstructure:"http"`       // 引用 shared_config.go
-	Grpc      GrpcConfig      `mapstructure:"grpc"`       // 引用 shared_config.go
-	Redis     RedisConfig     `mapstructure:"redis"`      // 引用 shared_config.go
-	Nacos     NacosConfig     `mapstructure:"nacos"`      // 引用 shared_config.go
-	RiskRules RiskRulesConfig `mapstructure:"risk_rules"` // Risk 独有
+	// HTTP 是 HTTP 服务配置
+	HTTP HTTPConfig `mapstructure:"http"`
+	// Grpc 是 gRPC 服务配置
+	Grpc GrpcConfig `mapstructure:"grpc"`
+	// Redis 是 Redis 连接配置
+	Redis RedisConfig `mapstructure:"redis"`
+	// Nacos 是 Nacos 注册中心配置
+	Nacos NacosConfig `mapstructure:"nacos"`
+	// RiskRules 是风控规则配置
+	RiskRules RiskRulesConfig `mapstructure:"risk_rules"`
 }
 
-// RiskRulesConfig 风控规则配置
+// RiskRulesConfig 汇总了所有风控规则设置。
 type RiskRulesConfig struct {
-	Login         LoginRuleConfig     `mapstructure:"login"`
-	IpRateLimit   IPRateLimitConfig   `mapstructure:"ip_rate_limit"`
+	// Login 登录规则配置
+	Login LoginRuleConfig `mapstructure:"login"`
+	// IpRateLimit IP 频率限制配置
+	IpRateLimit IPRateLimitConfig `mapstructure:"ip_rate_limit"`
+	// UserRateLimit 用户维度频率限制配置
 	UserRateLimit UserRateLimitConfig `mapstructure:"user_rate_limit"`
 }
 
+// LoginRuleConfig 登录保护规则
 type LoginRuleConfig struct {
-	MaxFailCount           int `mapstructure:"max_fail_count"`
+	// MaxFailCount 最大失败次数
+	MaxFailCount int `mapstructure:"max_fail_count"`
+	// FailCountExpireMinutes 失败记录有效期（分钟）
 	FailCountExpireMinutes int `mapstructure:"fail_count_expire_minutes"`
 }
 
+// IPRateLimitConfig IP 维度频率限制
 type IPRateLimitConfig struct {
-	Limit         int `mapstructure:"limit"`
+	// Limit 限制次数
+	Limit int `mapstructure:"limit"`
+	// WindowSeconds 时间窗口（秒）
 	WindowSeconds int `mapstructure:"window_seconds"`
 }
 
+// UserRateLimitConfig 用户维度频率限制汇总
 type UserRateLimitConfig struct {
-	OnlineSelfTest  UserRateLimitRule `mapstructure:"online_self_test"`
+	// OnlineSelfTest 在线自测频率限制
+	OnlineSelfTest UserRateLimitRule `mapstructure:"online_self_test"`
+	// JudgeSubmission 判题提交频率限制
 	JudgeSubmission UserRateLimitRule `mapstructure:"judge_submission"`
 }
 
+// UserRateLimitRule 通用的用户频率限制规则
 type UserRateLimitRule struct {
-	Limit         int `mapstructure:"limit"`
+	// Limit 限制次数
+	Limit int `mapstructure:"limit"`
+	// WindowSeconds 时间窗口（秒）
 	WindowSeconds int `mapstructure:"window_seconds"`
 }
 
-// Risk 加载逻辑
-
-// LoadRiskConfig 加载 Risk 服务配置
+// LoadRiskConfig 是旧版的公共入口点，委托给统一加载器执行。
 func LoadRiskConfig(configPath string) (*RiskConfig, error) {
-	// [1] 加载 .env
-	_ = godotenv.Load()
+	return LoadRiskConfigWithOptions(LoadOptions{ConfigPath: configPath})
+}
 
-	// [2] 确定环境
-	env := os.Getenv("APP_ENV")
-	if env == "" {
-		env = os.Getenv("ENV")
-	}
-	if env == "" {
-		env = "prod" // 默认生产环境
+// LoadRiskConfigWithOptions 根据显式的配置和环境变量覆盖加载风控服务配置。
+func LoadRiskConfigWithOptions(options LoadOptions) (*RiskConfig, error) {
+	v, env, err := newServiceViper("risk", "RISK", options, RiskConfig{})
+	if err != nil {
+		return nil, err
 	}
 
-	fmt.Printf("[RiskConfig] 正在加载环境: %s\n", env)
+	fmt.Printf("[RiskConfig] loading environment: %s\n", env)
+	fmt.Printf("[RiskConfig] using config file: %s\n", v.ConfigFileUsed())
 
-	v := viper.New()
-
-	// [3] 开启自动环境变量映射
-	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
-	v.AutomaticEnv()
-
-	// [4] 配置文件定位
-	// 文件名格式: risk.dev.yaml 或 risk.prod.yaml
-	configName := fmt.Sprintf("risk.%s", env)
-	v.SetConfigName(configName)
-	v.SetConfigType("yaml")
-	// 添加搜索路径
-	v.AddConfigPath(configPath)
-	v.AddConfigPath("./configs")
-	v.AddConfigPath("../configs")
-	v.AddConfigPath(".")
-
-	// [5] 读取配置
-	if err := v.ReadInConfig(); err != nil {
-		return nil, fmt.Errorf("读取配置文件 %s.yaml 失败: %w", configName, err)
-	}
-	fmt.Printf("[RiskConfig] 使用配置文件: %s\n", v.ConfigFileUsed())
-
-	// [6] 解析到结构体
 	var cfg RiskConfig
 	if err := v.Unmarshal(&cfg); err != nil {
-		return nil, fmt.Errorf("解析配置结构失败: %w", err)
+		return nil, fmt.Errorf("unmarshal risk config: %w", err)
 	}
 
 	if cfg.Nacos.Enable {
 		if cfg.Nacos.Metadata == nil {
 			cfg.Nacos.Metadata = make(map[string]string)
 		}
-		// 1. 自动填入 gRPC 端口 (解决 Java 找不到服务的问题)
+		// Keep the existing metadata key for compatibility until the registry contract is unified.
 		cfg.Nacos.Metadata["gRPC_port"] = strconv.Itoa(cfg.Grpc.Port)
 	}
-	// [7] 校验配置
-	if err := cfg.Validate(env); err != nil {
+	if err := validateRiskConfigStrict(&cfg, env); err != nil {
 		return nil, err
 	}
 
-	// [8] 打印摘要
 	cfg.Print()
 
 	return &cfg, nil
-}
-
-//  辅助方法
-
-// Validate 校验 Risk 配置
-func (c *RiskConfig) Validate(env string) error {
-	if c.Redis.Addr == "" {
-		return fmt.Errorf("Redis地址不能为空")
-	}
-	if c.HTTP.Port <= 0 {
-		return fmt.Errorf("HTTP端口无效")
-	}
-
-	// 生产环境严格检查
-	if env == "prod" {
-		if c.Redis.Password == "" {
-			return fmt.Errorf("[安全阻断] 生产环境 Redis 密码不能为空")
-		}
-	}
-	return nil
-}
-
-// Print 打印 Risk 配置摘要
-func (c *RiskConfig) Print() {
-	fmt.Println("\n=========== Risk 服务配置 ===========")
-	fmt.Printf("HTTP端口: %d\n", c.HTTP.Port)
-	fmt.Printf("gRPC端口: %d\n", c.Grpc.Port)
-
-	fmt.Println("-------------------------------------")
-	fmt.Printf("Redis地址: %s\n", c.Redis.Addr)
-	fmt.Printf("Redis DB : %d\n", c.Redis.DB)
-	// 简单脱敏
-	passMask := "<无>"
-	if len(c.Redis.Password) > 0 {
-		passMask = "******"
-	}
-	fmt.Printf("Redis密码: %s\n", passMask)
-
-	fmt.Println("-------------------------------------")
-	if c.Nacos.Enable {
-		ns := c.Nacos.Namespace
-		if ns == "" {
-			ns = "public (默认)"
-		}
-		fmt.Printf("Nacos: 启用\n")
-		fmt.Printf("地址 : %s\n", c.Nacos.ServerAddr)
-		fmt.Printf("空间 : %s\n", ns)
-		fmt.Printf("元数据: %v\n", c.Nacos.Metadata)
-	} else {
-		fmt.Printf("Nacos: [禁用]\n")
-	}
-
-	fmt.Println("-------------------------------------")
-	fmt.Printf("风控规则-IP限流: %d次/%d秒\n",
-		c.RiskRules.IpRateLimit.Limit, c.RiskRules.IpRateLimit.WindowSeconds)
-	fmt.Printf("风控规则-登录失败: %d次 (锁定%d分钟)\n",
-		c.RiskRules.Login.MaxFailCount, c.RiskRules.Login.FailCountExpireMinutes)
-
-	fmt.Println("=====================================\n")
 }
