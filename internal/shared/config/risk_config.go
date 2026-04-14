@@ -5,68 +5,52 @@ import (
 	"strconv"
 )
 
-// RiskConfig 是风控服务的完整运行时配置树。
+// RiskConfig is the full runtime config tree for the risk service.
 type RiskConfig struct {
-	// HTTP 是 HTTP 服务配置
-	HTTP HTTPConfig `mapstructure:"http"`
-	// Grpc 是 gRPC 服务配置
-	Grpc GrpcConfig `mapstructure:"grpc"`
-	// Redis 是 Redis 连接配置
-	Redis RedisConfig `mapstructure:"redis"`
-	// Nacos 是 Nacos 注册中心配置
-	Nacos NacosConfig `mapstructure:"nacos"`
-	// RiskRules 是风控规则配置
+	HTTP      HTTPConfig      `mapstructure:"http"`
+	Grpc      GrpcConfig      `mapstructure:"grpc"`
+	Redis     RedisConfig     `mapstructure:"redis"`
+	Nacos     NacosConfig     `mapstructure:"nacos"`
 	RiskRules RiskRulesConfig `mapstructure:"risk_rules"`
 }
 
-// RiskRulesConfig 汇总了所有风控规则设置。
+// RiskRulesConfig groups all risk rule settings.
 type RiskRulesConfig struct {
-	// Login 登录规则配置
-	Login LoginRuleConfig `mapstructure:"login"`
-	// IpRateLimit IP 频率限制配置
-	IpRateLimit IPRateLimitConfig `mapstructure:"ip_rate_limit"`
-	// UserRateLimit 用户维度频率限制配置
+	Login         LoginRuleConfig     `mapstructure:"login"`
+	IpRateLimit   IPRateLimitConfig   `mapstructure:"ip_rate_limit"`
 	UserRateLimit UserRateLimitConfig `mapstructure:"user_rate_limit"`
 }
 
-// LoginRuleConfig 登录保护规则
+// LoginRuleConfig defines login protection rules.
 type LoginRuleConfig struct {
-	// MaxFailCount 最大失败次数
-	MaxFailCount int `mapstructure:"max_fail_count"`
-	// FailCountExpireMinutes 失败记录有效期（分钟）
+	MaxFailCount           int `mapstructure:"max_fail_count"`
 	FailCountExpireMinutes int `mapstructure:"fail_count_expire_minutes"`
 }
 
-// IPRateLimitConfig IP 维度频率限制
+// IPRateLimitConfig defines IP-based rate limiting.
 type IPRateLimitConfig struct {
-	// Limit 限制次数
-	Limit int `mapstructure:"limit"`
-	// WindowSeconds 时间窗口（秒）
+	Limit         int `mapstructure:"limit"`
 	WindowSeconds int `mapstructure:"window_seconds"`
 }
 
-// UserRateLimitConfig 用户维度频率限制汇总
+// UserRateLimitConfig groups user-scoped rate limits.
 type UserRateLimitConfig struct {
-	// OnlineSelfTest 在线自测频率限制
-	OnlineSelfTest UserRateLimitRule `mapstructure:"online_self_test"`
-	// JudgeSubmission 判题提交频率限制
+	OnlineSelfTest  UserRateLimitRule `mapstructure:"online_self_test"`
 	JudgeSubmission UserRateLimitRule `mapstructure:"judge_submission"`
 }
 
-// UserRateLimitRule 通用的用户频率限制规则
+// UserRateLimitRule defines a generic user-scoped rate limit.
 type UserRateLimitRule struct {
-	// Limit 限制次数
-	Limit int `mapstructure:"limit"`
-	// WindowSeconds 时间窗口（秒）
+	Limit         int `mapstructure:"limit"`
 	WindowSeconds int `mapstructure:"window_seconds"`
 }
 
-// LoadRiskConfig 是旧版的公共入口点，委托给统一加载器执行。
+// LoadRiskConfig preserves the legacy entrypoint while delegating to the unified loader.
 func LoadRiskConfig(configPath string) (*RiskConfig, error) {
 	return LoadRiskConfigWithOptions(LoadOptions{ConfigPath: configPath})
 }
 
-// LoadRiskConfigWithOptions 根据显式的配置和环境变量覆盖加载风控服务配置。
+// LoadRiskConfigWithOptions loads Risk config with explicit config and env overrides.
 func LoadRiskConfigWithOptions(options LoadOptions) (*RiskConfig, error) {
 	v, env, err := newServiceViper("risk", "RISK", options, RiskConfig{})
 	if err != nil {

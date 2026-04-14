@@ -36,7 +36,7 @@ risk_rules:
 nacos:
   enable: false
   server_addr: "127.0.0.1:8848"
-  # Env override: RISK_REGISTRY_NACOS_NAMESPACE
+  # Env override: RISK_NACOS_NAMESPACE
   namespace: ""
   service_name: "risk-service"
   group_name: "DEFAULT_GROUP"

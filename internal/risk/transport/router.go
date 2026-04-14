@@ -40,76 +40,9 @@ func NewRiskRouter(redisClient *redis.Client, logger *zap.Logger, serviceInfo Se
 		)
 	})
 
-	healthChecker := health.NewChecker(redisClient, logger)
+	systemHandler := NewRiskSystemHandler(health.NewChecker(redisClient, logger), serviceInfo)
 
-	router.GET("/health", func(c *gin.Context) {
-		ctx := c.Request.Context()
-		response := health.HealthResponse{
-			Status:     health.StatusUP,
-			Components: map[string]health.ComponentCheck{},
-			Timestamp:  time.Now().Format(time.RFC3339),
-		}
-
-		redisCheck := healthChecker.CheckRedis(ctx)
-		response.Components["redis"] = redisCheck
-		if redisCheck.Status == health.StatusDOWN {
-			response.Status = health.StatusDOWN
-			c.JSON(503, response)
-			return
-		}
-
-		c.JSON(200, response)
-	})
-
-	router.GET("/health/ready", func(c *gin.Context) {
-		ctx := c.Request.Context()
-		redisCheck := healthChecker.CheckRedis(ctx)
-		if redisCheck.Status == health.StatusDOWN {
-			logger.Warn("readiness check failed", zap.String("error", redisCheck.Message))
-			c.JSON(503, gin.H{"status": "DOWN", "error": redisCheck.Message})
-			return
-		}
-
-		c.JSON(200, gin.H{"status": "UP"})
-	})
-
-	router.GET("/health/live", func(c *gin.Context) {
-		c.JSON(200, gin.H{"status": "UP"})
-	})
-
-	router.GET("/actuator/health", func(c *gin.Context) {
-		ctx := c.Request.Context()
-		response := health.HealthResponse{
-			Status:     health.StatusUP,
-			Components: map[string]health.ComponentCheck{},
-			Timestamp:  time.Now().Format(time.RFC3339),
-		}
-
-		redisCheck := healthChecker.CheckRedis(ctx)
-		response.Components["redis"] = redisCheck
-		if redisCheck.Status == health.StatusDOWN {
-			response.Status = health.StatusDOWN
-			c.JSON(503, response)
-			return
-		}
-
-		c.JSON(200, response)
-	})
-
-	router.GET("/actuator/health/readiness", func(c *gin.Context) {
-		ctx := c.Request.Context()
-		redisCheck := healthChecker.CheckRedis(ctx)
-		if redisCheck.Status == health.StatusDOWN {
-			c.JSON(503, gin.H{"status": "DOWN"})
-			return
-		}
-
-		c.JSON(200, gin.H{"status": "UP"})
-	})
-
-	router.GET("/actuator/health/liveness", func(c *gin.Context) {
-		c.JSON(200, gin.H{"status": "UP"})
-	})
+	router.GET("/health", systemHandler.Health)
 
 	if adminReader != nil {
 		adminHandler := NewRiskAdminHandler(adminReader)
@@ -120,20 +53,7 @@ func NewRiskRouter(redisClient *redis.Client, logger *zap.Logger, serviceInfo Se
 		admin.GET("/risk-ips/:ip/events", adminHandler.GetRiskIPEvents)
 	}
 
-	router.GET("/info", func(c *gin.Context) {
-		c.JSON(200, gin.H{
-			"service":     serviceInfo.Name,
-			"version":     serviceInfo.Version,
-			"protocol":    serviceInfo.Protocol,
-			"description": serviceInfo.Description,
-			"endpoints": gin.H{
-				"http":         serviceInfo.httpEndpoint(),
-				"grpc":         serviceInfo.grpcEndpoint(),
-				"health":       "/health, /health/ready, /health/live",
-				"admin_riskip": "/api/v1/admin/risk-ips, /api/v1/admin/risk-ips/{ip}, /api/v1/admin/risk-ips/{ip}/events",
-			},
-		})
-	})
+	router.GET("/info", systemHandler.Info)
 
 	return router
 }

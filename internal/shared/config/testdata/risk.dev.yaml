@@ -1,0 +1,39 @@
+http:
+  port: 9080
+
+grpc:
+  port: 9090
+
+redis:
+  addr: "127.0.0.1:6379"
+  password: ""
+  db: 1
+  pool_size: 50
+  dial_timeout_seconds: 5
+  read_timeout_seconds: 3
+  write_timeout_seconds: 3
+
+nacos:
+  enable: false
+  server_addr: "127.0.0.1:8848"
+  namespace: "file-namespace"
+  service_name: "risk-service"
+  group_name: "DEFAULT_GROUP"
+  cluster_name: "dev-cluster"
+  register_ip: ""
+  weight: 1.0
+
+risk_rules:
+  login:
+    max_fail_count: 3
+    fail_count_expire_minutes: 10
+  ip_rate_limit:
+    limit: 100
+    window_seconds: 1
+  user_rate_limit:
+    online_self_test:
+      limit: 10
+      window_seconds: 5
+    judge_submission:
+      limit: 10
+      window_seconds: 10

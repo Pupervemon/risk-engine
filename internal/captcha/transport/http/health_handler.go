@@ -10,18 +10,16 @@ import (
 	"go.uber.org/zap"
 )
 
-// HealthHandler 健康检查处理器（captcha服务专用，包含扩展端点）
+// HealthHandler serves health endpoints for the captcha service.
 type HealthHandler struct {
 	Checker *health.Checker
 }
 
-// Health 健康检查接口（简化版）
-// GET /health
+// Health returns a lightweight health response.
 func (h *HealthHandler) Health(c *gin.Context) {
 	ctx := c.Request.Context()
 	overallStatus := health.StatusUP
 
-	// 检查Redis连接
 	redisStatus := h.Checker.CheckRedis(ctx)
 	if redisStatus.Status == health.StatusDOWN {
 		overallStatus = health.StatusDOWN
@@ -43,19 +41,16 @@ func (h *HealthHandler) Health(c *gin.Context) {
 	c.JSON(statusCode, response)
 }
 
-// DetailedHealth 详细健康检查接口
-// GET /actuator/health
+// DetailedHealth returns a fuller health response for actuator-style probes.
 func (h *HealthHandler) DetailedHealth(c *gin.Context) {
 	ctx := c.Request.Context()
 	overallStatus := health.StatusUP
 
-	// 检查Redis连接
 	redisStatus := h.Checker.CheckRedis(ctx)
 	if redisStatus.Status == health.StatusDOWN {
 		overallStatus = health.StatusDOWN
 	}
 
-	// 检查磁盘空间（可选）
 	diskStatus := checkDisk()
 
 	response := health.HealthResponse{
@@ -75,8 +70,7 @@ func (h *HealthHandler) DetailedHealth(c *gin.Context) {
 	c.JSON(statusCode, response)
 }
 
-// Liveness 存活探针（K8s）
-// GET /actuator/health/liveness
+// Liveness is the liveness probe endpoint.
 func (h *HealthHandler) Liveness(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"status":    health.StatusUP,
@@ -84,11 +78,9 @@ func (h *HealthHandler) Liveness(c *gin.Context) {
 	})
 }
 
-// Readiness 就绪探针（K8s）
-// GET /actuator/health/readiness
+// Readiness is the readiness probe endpoint.
 func (h *HealthHandler) Readiness(c *gin.Context) {
 	ctx := c.Request.Context()
-	// 检查关键依赖是否就绪
 	redisStatus := h.Checker.CheckRedis(ctx)
 
 	status := health.StatusUP
@@ -108,17 +100,15 @@ func (h *HealthHandler) Readiness(c *gin.Context) {
 	})
 }
 
-// checkDisk 检查磁盘状态（简化版）
+// checkDisk is a placeholder until disk usage is wired into health checks.
 func checkDisk() health.ComponentCheck {
-	// 这里可以添加磁盘空间检查逻辑
-	// 简化处理，直接返回UP
 	return health.ComponentCheck{
 		Status:  health.StatusUP,
-		Message: "磁盘空间充足",
+		Message: "disk space is sufficient",
 	}
 }
 
-// NewHealthHandler 创建健康检查处理器
+// NewHealthHandler creates a captcha-specific health handler.
 func NewHealthHandler(redis *redis.Client, logger *zap.Logger) *HealthHandler {
 	return &HealthHandler{
 		Checker: health.NewChecker(redis, logger),

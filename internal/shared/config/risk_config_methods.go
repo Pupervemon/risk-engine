@@ -2,14 +2,15 @@ package config
 
 import "fmt"
 
-// Validate 验证风控配置是否有效，复用了严格的启动验证逻辑。
+// Validate preserves the public method while reusing strict startup validation.
 func (c *RiskConfig) Validate(env string) error {
 	return validateRiskConfigStrict(c, env)
 }
 
-// Print 在控制台打印脱敏后的风控服务配置摘要。
+// Print outputs a redacted startup summary.
 func (c *RiskConfig) Print() {
-	fmt.Println("\n=========== Risk Service Config ===========")
+	fmt.Println()
+	fmt.Println("=========== Risk Service Config ===========")
 	fmt.Printf("HTTP port: %d\n", c.HTTP.Port)
 	fmt.Printf("gRPC port: %d\n", c.Grpc.Port)
 
@@ -39,5 +40,6 @@ func (c *RiskConfig) Print() {
 		c.RiskRules.UserRateLimit.JudgeSubmission.Limit,
 		c.RiskRules.UserRateLimit.JudgeSubmission.WindowSeconds)
 
-	fmt.Println("===========================================\n")
+	fmt.Println("===========================================")
+	fmt.Println()
 }

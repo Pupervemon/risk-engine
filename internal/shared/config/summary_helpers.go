@@ -2,7 +2,7 @@ package config
 
 import "strings"
 
-// maskedConfigValue 对敏感配置值进行掩码处理，用于日志显示。
+// maskedConfigValue redacts a sensitive config value for logging.
 func maskedConfigValue(value string) string {
 	if strings.TrimSpace(value) == "" {
 		return "<unset>"
@@ -10,7 +10,7 @@ func maskedConfigValue(value string) string {
 	return "******"
 }
 
-// boolLabel 将布尔值转换为可读的 enabled/disabled 标签。
+// boolLabel converts a boolean into a stable enabled/disabled label.
 func boolLabel(enabled bool) string {
 	if enabled {
 		return "enabled"
@@ -18,7 +18,7 @@ func boolLabel(enabled bool) string {
 	return "disabled"
 }
 
-// displayNamespace 处理 Nacos 命名空间的显示，为空时返回 public。
+// displayNamespace keeps the namespace output stable, falling back to public.
 func displayNamespace(namespace string) string {
 	namespace = strings.TrimSpace(namespace)
 	if namespace == "" {

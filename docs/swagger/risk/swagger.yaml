@@ -1,0 +1,417 @@
+basePath: /
+definitions:
+  transport.ErrorResponse:
+    properties:
+      error:
+        type: string
+    type: object
+  transport.HealthComponentDoc:
+    properties:
+      message:
+        type: string
+      status:
+        type: string
+    type: object
+  transport.HealthResponseDoc:
+    properties:
+      components:
+        additionalProperties:
+          $ref: '#/definitions/transport.HealthComponentDoc'
+        type: object
+      status:
+        type: string
+      timestamp:
+        type: string
+    type: object
+  transport.RiskIPDetailDoc:
+    properties:
+      blacklist_expire_at:
+        type: string
+      blacklist_reason:
+        type: string
+      blacklisted:
+        type: boolean
+      current_login_fail_count:
+        type: integer
+      current_login_fail_expire_at:
+        type: string
+      event_count:
+        type: integer
+      first_seen_at:
+        type: string
+      flags:
+        items:
+          type: string
+        type: array
+      ip:
+        type: string
+      last_action:
+        type: string
+      last_reason:
+        type: string
+      last_req_id:
+        type: string
+      last_scene:
+        type: string
+      last_seen_at:
+        type: string
+      latest_user_id_masked:
+        type: string
+      severity:
+        type: string
+      total_blacklist_hits:
+        type: integer
+      total_checks:
+        type: integer
+      total_rejects:
+        type: integer
+      total_report_failure:
+        type: integer
+      total_report_success:
+        type: integer
+      total_verifies:
+        type: integer
+    type: object
+  transport.RiskIPEventDoc:
+    properties:
+      action:
+        type: string
+      blacklist_expire_at:
+        type: string
+      current_blacklisted:
+        type: boolean
+      event_id:
+        type: string
+      event_type:
+        type: string
+      ip:
+        type: string
+      login_fail_count:
+        type: integer
+      occurred_at:
+        type: string
+      occurred_at_unix:
+        type: integer
+      reason:
+        type: string
+      received:
+        type: boolean
+      req_id:
+        type: string
+      scene:
+        type: string
+      user_id_masked:
+        type: string
+    type: object
+  transport.RiskIPEventsResponseDoc:
+    properties:
+      has_more:
+        type: boolean
+      ip:
+        type: string
+      items:
+        items:
+          $ref: '#/definitions/transport.RiskIPEventDoc'
+        type: array
+      limit:
+        type: integer
+      offset:
+        type: integer
+      total:
+        type: integer
+    type: object
+  transport.RiskIPListResponseDoc:
+    properties:
+      has_more:
+        type: boolean
+      items:
+        items:
+          $ref: '#/definitions/transport.RiskIPSummaryDoc'
+        type: array
+      limit:
+        type: integer
+      offset:
+        type: integer
+      total:
+        type: integer
+    type: object
+  transport.RiskIPSummaryDoc:
+    properties:
+      blacklist_expire_at:
+        type: string
+      blacklist_reason:
+        type: string
+      blacklisted:
+        type: boolean
+      current_login_fail_count:
+        type: integer
+      current_login_fail_expire_at:
+        type: string
+      first_seen_at:
+        type: string
+      flags:
+        items:
+          type: string
+        type: array
+      ip:
+        type: string
+      last_action:
+        type: string
+      last_reason:
+        type: string
+      last_req_id:
+        type: string
+      last_scene:
+        type: string
+      last_seen_at:
+        type: string
+      latest_user_id_masked:
+        type: string
+      severity:
+        type: string
+      total_blacklist_hits:
+        type: integer
+      total_checks:
+        type: integer
+      total_rejects:
+        type: integer
+      total_report_failure:
+        type: integer
+      total_report_success:
+        type: integer
+      total_verifies:
+        type: integer
+    type: object
+  transport.ServiceEndpointsResponse:
+    properties:
+      admin_riskip:
+        type: string
+      grpc:
+        type: string
+      health:
+        type: string
+      http:
+        type: string
+    type: object
+  transport.ServiceInfoResponse:
+    properties:
+      description:
+        type: string
+      endpoints:
+        $ref: '#/definitions/transport.ServiceEndpointsResponse'
+      protocol:
+        type: string
+      service:
+        type: string
+      version:
+        type: string
+    type: object
+info:
+  contact: {}
+  description: HTTP endpoints for health checks, service metadata, and risk admin
+    insight queries.
+  title: Risk Service HTTP API
+  version: 1.0.0
+paths:
+  /api/v1/admin/risk-ips:
+    get:
+      description: Returns paginated risk IP insight records. When q is provided,
+        it is treated as an exact IP lookup.
+      parameters:
+      - description: Authenticated user ID
+        in: header
+        name: user_id
+        required: true
+        type: string
+      - description: Authenticated role list. Supports comma-separated values or JSON
+          array. Must include 2 (teacher) or 3 (admin).
+        in: header
+        name: user_roles
+        required: true
+        type: string
+      - description: Page size. Defaults to 20 and is capped at 100.
+        in: query
+        name: limit
+        type: integer
+      - description: Pagination offset. Defaults to 0.
+        in: query
+        name: offset
+        type: integer
+      - description: Exact IP filter.
+        in: query
+        name: q
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/transport.RiskIPListResponseDoc'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/transport.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/transport.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/transport.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/transport.ErrorResponse'
+      summary: List risk IP insights
+      tags:
+      - Risk Admin
+  /api/v1/admin/risk-ips/{ip}:
+    get:
+      description: Returns the aggregated insight profile for a single risk IP.
+      parameters:
+      - description: Authenticated user ID
+        in: header
+        name: user_id
+        required: true
+        type: string
+      - description: Authenticated role list. Supports comma-separated values or JSON
+          array. Must include 2 (teacher) or 3 (admin).
+        in: header
+        name: user_roles
+        required: true
+        type: string
+      - description: Risk IP address
+        in: path
+        name: ip
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/transport.RiskIPDetailDoc'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/transport.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/transport.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/transport.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/transport.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/transport.ErrorResponse'
+      summary: Get risk IP insight
+      tags:
+      - Risk Admin
+  /api/v1/admin/risk-ips/{ip}/events:
+    get:
+      description: Returns paginated event history for a single risk IP.
+      parameters:
+      - description: Authenticated user ID
+        in: header
+        name: user_id
+        required: true
+        type: string
+      - description: Authenticated role list. Supports comma-separated values or JSON
+          array. Must include 2 (teacher) or 3 (admin).
+        in: header
+        name: user_roles
+        required: true
+        type: string
+      - description: Risk IP address
+        in: path
+        name: ip
+        required: true
+        type: string
+      - description: Page size. Defaults to 50 and is capped at 200.
+        in: query
+        name: limit
+        type: integer
+      - description: Pagination offset. Defaults to 0.
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/transport.RiskIPEventsResponseDoc'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/transport.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/transport.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/transport.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/transport.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/transport.ErrorResponse'
+      summary: List risk IP events
+      tags:
+      - Risk Admin
+  /health:
+    get:
+      description: Returns overall service health and dependency status.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/transport.HealthResponseDoc'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/transport.HealthResponseDoc'
+      summary: Service health check
+      tags:
+      - Health
+  /info:
+    get:
+      description: Returns service name, version, protocol, and exposed endpoints.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/transport.ServiceInfoResponse'
+      summary: Service metadata
+      tags:
+      - Service Info
+schemes:
+- http
+swagger: "2.0"
+tags:
+- description: Service health probe.
+  name: Health
+- description: Runtime metadata and exposed endpoint information.
+  name: Service Info
+- description: Admin-only interfaces for querying risk IP summaries and event history.
+  name: Risk Admin

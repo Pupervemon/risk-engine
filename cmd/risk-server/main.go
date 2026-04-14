@@ -22,6 +22,20 @@ import (
 	"google.golang.org/grpc/reflection"
 )
 
+// To export Swagger docs later, run from the repo root:
+// swag init --parseInternal --outputTypes json,yaml -g cmd/risk-server/main.go -o docs/swagger/risk
+//
+// @title Risk Service HTTP API
+// @version 1.0.0
+// @description HTTP endpoints for health checks, service metadata, and risk admin insight queries.
+// @BasePath /
+// @schemes http
+// @tag.name Health
+// @tag.description Service health probe.
+// @tag.name Service Info
+// @tag.description Runtime metadata and exposed endpoint information.
+// @tag.name Risk Admin
+// @tag.description Admin-only interfaces for querying risk IP summaries and event history.
 func main() {
 	configFile := flag.String("config", "", "path to config file")
 	configEnv := flag.String("env", "", "app environment override")
@@ -45,10 +59,11 @@ func main() {
 		zap.Bool("nacos_enabled", cfg.Nacos.Enable))
 
 	rdb := redis.NewClient(&redis.Options{
-		Addr:         cfg.Redis.Addr,
-		Password:     cfg.Redis.Password,
-		DB:           cfg.Redis.DB,
-		PoolSize:     cfg.Redis.PoolSize,
+		Addr:     cfg.Redis.Addr,
+		Password: cfg.Redis.Password,
+		DB:       cfg.Redis.DB,
+		PoolSize: cfg.Redis.PoolSize,
+		// 根据配置文件和环境变量加载 risk 服务配置。
 		DialTimeout:  time.Duration(cfg.Redis.DialTimeoutSeconds) * time.Second,
 		ReadTimeout:  time.Duration(cfg.Redis.ReadTimeoutSeconds) * time.Second,
 		WriteTimeout: time.Duration(cfg.Redis.WriteTimeoutSeconds) * time.Second,
@@ -65,8 +80,9 @@ func main() {
 	riskService := riskservice.NewRiskService(rdb, &cfg.RiskRules, logger)
 
 	httpRouter := risktransport.NewHealthRouter(rdb, logger, risktransport.ServiceInfo{
-		Name:        cfg.Nacos.ServiceName,
-		Version:     "1.0.0",
+		Name:    cfg.Nacos.ServiceName,
+		Version: "1.0.0",
+		// Redis 同时承担规则数据和运行时依赖，启动时先建立连接并做健康探测。
 		Protocol:    "grpc",
 		Description: "Risk Engine - risk control service",
 		HTTPPort:    cfg.HTTP.Port,
@@ -88,6 +104,7 @@ func main() {
 
 	grpcServer := grpc.NewServer(
 		grpc.UnaryInterceptor(UnaryLoggerInterceptor(logger)),
+		// gRPC 服务在这里统一挂载 unary 拦截器，用于记录每次 RPC 的耗时和结果。
 	)
 
 	pb.RegisterRiskControlServiceServer(grpcServer, riskService)
@@ -112,6 +129,7 @@ func main() {
 	}
 
 	go func() {
+		// HTTP 服务器的 ListenAndServe 会阻塞当前 goroutine，因此放到独立协程启动。
 		logger.Info("risk http server listening", zap.Int("port", cfg.HTTP.Port))
 		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			logger.Error("http server exited unexpectedly", zap.Error(err))
@@ -119,6 +137,7 @@ func main() {
 	}()
 
 	go func() {
+		// gRPC 服务器同样是阻塞式 Serve 调用，单独起协程后才能与 HTTP 服务并行运行。
 		logger.Info("risk grpc server listening", zap.Int("port", cfg.Grpc.Port))
 		if err := grpcServer.Serve(grpcListener); err != nil {
 			logger.Error("grpc server exited unexpectedly", zap.Error(err))
@@ -138,6 +157,7 @@ func main() {
 
 	if err := nacosRegistry.Deregister(); err != nil {
 		logger.Error("failed to deregister nacos service", zap.Error(err))
+		// HTTP 服务器主要提供健康检查和管理类接口。
 	}
 
 	time.Sleep(1 * time.Second)
@@ -145,6 +165,7 @@ func main() {
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer shutdownCancel()
 	if err := httpServer.Shutdown(shutdownCtx); err != nil {
+		// 稍等一段时间，确保服务监听已建立后再执行注册。
 		logger.Error("failed to shutdown http server", zap.Error(err))
 	} else {
 		logger.Info("http server closed")

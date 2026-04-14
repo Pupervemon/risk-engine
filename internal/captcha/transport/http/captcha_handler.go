@@ -21,14 +21,14 @@ type captchaResponse struct {
 	TileImage         string `json:"tileImage"`
 	TargetY           int    `json:"targetY"`
 	ExpiresIn         int    `json:"expiresIn"`
-	RequireMouseTrack bool   `json:"requireMouseTrack"` // 是否需要鼠标轨迹
+	RequireMouseTrack bool   `json:"requireMouseTrack"` // Whether the client must submit mouse-track data.
 }
 
 type verifyRequest struct {
 	CaptchaID  string                       `json:"captchaId"`
 	PointX     int                          `json:"pointX"`
 	PointY     int                          `json:"pointY"`
-	MouseTrack *[]captchaservice.TrackPoint `json:"mouseTrack,omitempty"` // 可选的鼠标轨迹
+	MouseTrack *[]captchaservice.TrackPoint `json:"mouseTrack,omitempty"` // Optional mouse-track data.
 }
 
 type verifyResponse struct {
@@ -44,7 +44,7 @@ type errorResponse struct {
 func (h *CaptchaHandler) GetCaptcha(c *gin.Context) {
 	challenge, err := h.CaptchaService.Generate(c.Request.Context())
 	if err != nil {
-		h.Logger.Error("生成验证码失败", zap.Error(err))
+		h.Logger.Error("failed to generate captcha", zap.Error(err))
 		writeJSON(c, http.StatusInternalServerError, errorResponse{Error: "CAPTCHA_GENERATE_FAILED", Reason: "INTERNAL_ERROR"})
 		return
 	}
@@ -62,31 +62,30 @@ func (h *CaptchaHandler) GetCaptcha(c *gin.Context) {
 func (h *CaptchaHandler) VerifyCaptcha(c *gin.Context) {
 	var req verifyRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.Logger.Warn("验证码请求参数解析失败", zap.Error(err))
+		h.Logger.Warn("failed to parse captcha request body", zap.Error(err))
 		writeJSON(c, http.StatusBadRequest, errorResponse{Error: "INVALID_JSON", Reason: "BAD_REQUEST"})
 		return
 	}
 
-	trackInfo := "无轨迹"
+	trackInfo := "absent"
 	if req.MouseTrack != nil {
-		trackInfo = "有轨迹"
+		trackInfo = "present"
 	}
 
-	h.Logger.Info("开始验证码校验",
+	h.Logger.Info("verifying captcha",
 		zap.String("captchaId", req.CaptchaID),
 		zap.Int("pointX", req.PointX),
 		zap.Int("pointY", req.PointY),
 		zap.String("track", trackInfo))
 
-	// 使用带轨迹校验的验证方法
 	valid, reason, err := h.CaptchaService.VerifyWithTrack(c.Request.Context(), req.CaptchaID, req.PointX, req.PointY, req.MouseTrack)
 	if err != nil {
-		h.Logger.Error("验证码校验执行异常", zap.Error(err), zap.String("captchaId", req.CaptchaID))
+		h.Logger.Error("captcha verification failed", zap.Error(err), zap.String("captchaId", req.CaptchaID))
 		writeJSON(c, http.StatusInternalServerError, errorResponse{Error: "CAPTCHA_VERIFY_FAILED", Reason: "INTERNAL_ERROR"})
 		return
 	}
 	if !valid {
-		h.Logger.Warn("验证码校验未通过",
+		h.Logger.Warn("captcha rejected",
 			zap.String("captchaId", req.CaptchaID),
 			zap.Int("pointX", req.PointX),
 			zap.String("reason", reason))
@@ -94,11 +93,11 @@ func (h *CaptchaHandler) VerifyCaptcha(c *gin.Context) {
 		return
 	}
 
-	h.Logger.Info("验证码校验通过", zap.String("captchaId", req.CaptchaID))
+	h.Logger.Info("captcha verified", zap.String("captchaId", req.CaptchaID))
 
 	token, exp, err := h.TokenService.IssueToken(c.Request.Context(), req.CaptchaID)
 	if err != nil {
-		h.Logger.Error("签发 token 失败", zap.Error(err))
+		h.Logger.Error("failed to issue token", zap.Error(err))
 		writeJSON(c, http.StatusInternalServerError, errorResponse{Error: "TOKEN_ISSUE_FAILED", Reason: "INTERNAL_ERROR"})
 		return
 	}

@@ -2,14 +2,15 @@ package config
 
 import "fmt"
 
-// Validate 验证配置是否有效，复用了严格的启动验证逻辑。
+// Validate preserves the public method while reusing strict startup validation.
 func (c *CaptchaConfig) Validate(env string) error {
 	return validateCaptchaConfigStrict(c, env)
 }
 
-// Print 在控制台打印脱敏后的启动配置摘要。
+// Print outputs a redacted startup summary.
 func (c *CaptchaConfig) Print() {
-	fmt.Println("\n=========== Captcha Service Config ===========")
+	fmt.Println()
+	fmt.Println("=========== Captcha Service Config ===========")
 	fmt.Printf("HTTP port: %d\n", c.HTTP.Port)
 	fmt.Printf("gRPC port: %d\n", c.Grpc.Port)
 
@@ -48,10 +49,11 @@ func (c *CaptchaConfig) Print() {
 			c.Captcha.TrackValidation.MaxDurationMs)
 	}
 
-	fmt.Println("==============================================\n")
+	fmt.Println("==============================================")
+	fmt.Println()
 }
 
-// displayExternalAPIURL 处理外部 API URL 的显示，为空时返回 <unset>。
+// displayExternalAPIURL hides empty upstream URLs behind a stable placeholder.
 func displayExternalAPIURL(url string) string {
 	if url == "" {
 		return "<unset>"
@@ -59,7 +61,7 @@ func displayExternalAPIURL(url string) string {
 	return url
 }
 
-// toggleStr 是 boolLabel 的别名，用于向后兼容。
+// toggleStr is a backward-compatible alias for boolLabel.
 func toggleStr(enabled bool) string {
 	return boolLabel(enabled)
 }

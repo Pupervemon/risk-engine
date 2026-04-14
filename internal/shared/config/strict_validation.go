@@ -2,16 +2,16 @@ package config
 
 import "fmt"
 
-// validateRiskConfigStrict 执行风控服务的严格配置验证逻辑。
+// validateRiskConfigStrict runs strict startup validation for the risk service.
 func validateRiskConfigStrict(cfg *RiskConfig, env string) error {
 	if cfg == nil {
-		return fmt.Errorf("risk config 不能为空")
+		return fmt.Errorf("risk config cannot be nil")
 	}
 
-	if err := validatePositiveInt("HTTP端口", cfg.HTTP.Port); err != nil {
+	if err := validatePositiveInt("HTTP port", cfg.HTTP.Port); err != nil {
 		return err
 	}
-	if err := validatePositiveInt("gRPC端口", cfg.Grpc.Port); err != nil {
+	if err := validatePositiveInt("gRPC port", cfg.Grpc.Port); err != nil {
 		return err
 	}
 	if err := validateRedisConfig(cfg.Redis); err != nil {
@@ -46,22 +46,22 @@ func validateRiskConfigStrict(cfg *RiskConfig, env string) error {
 	}
 
 	if env == "prod" && cfg.Redis.Password == "" {
-		return fmt.Errorf("[安全阻断] 生产环境 Redis 密码不能为空")
+		return fmt.Errorf("[security] redis password is required in prod")
 	}
 
 	return nil
 }
 
-// validateCaptchaConfigStrict 执行验证码服务的严格配置验证逻辑。
+// validateCaptchaConfigStrict runs strict startup validation for the captcha service.
 func validateCaptchaConfigStrict(cfg *CaptchaConfig, env string) error {
 	if cfg == nil {
-		return fmt.Errorf("captcha config 不能为空")
+		return fmt.Errorf("captcha config cannot be nil")
 	}
 
-	if err := validatePositiveInt("HTTP端口", cfg.HTTP.Port); err != nil {
+	if err := validatePositiveInt("HTTP port", cfg.HTTP.Port); err != nil {
 		return err
 	}
-	if err := validatePositiveInt("gRPC端口", cfg.Grpc.Port); err != nil {
+	if err := validatePositiveInt("gRPC port", cfg.Grpc.Port); err != nil {
 		return err
 	}
 	if err := validateRedisConfig(cfg.Redis); err != nil {
@@ -83,7 +83,7 @@ func validateCaptchaConfigStrict(cfg *CaptchaConfig, env string) error {
 		return err
 	}
 	if cfg.Captcha.GraphSizeMax < cfg.Captcha.GraphSizeMin {
-		return fmt.Errorf("captcha.graph_size_max 不能小于 graph_size_min")
+		return fmt.Errorf("captcha.graph_size_max cannot be smaller than graph_size_min")
 	}
 	if err := validatePositiveInt("captcha.slider_tolerance", cfg.Captcha.SliderTolerance); err != nil {
 		return err
@@ -100,7 +100,7 @@ func validateCaptchaConfigStrict(cfg *CaptchaConfig, env string) error {
 			return err
 		}
 		if cfg.Captcha.ExternalImageAPI.URL == "" {
-			return fmt.Errorf("启用图片池时 captcha.external_image_api.url 不能为空")
+			return fmt.Errorf("captcha.external_image_api.url is required when the image pool is enabled")
 		}
 		if err := validatePositiveInt("captcha.external_image_api.timeout_seconds", cfg.Captcha.ExternalImageAPI.TimeoutSeconds); err != nil {
 			return err
@@ -121,7 +121,7 @@ func validateCaptchaConfigStrict(cfg *CaptchaConfig, env string) error {
 			return err
 		}
 		if cfg.Captcha.TrackValidation.MaxDurationMs < cfg.Captcha.TrackValidation.MinDurationMs {
-			return fmt.Errorf("captcha.track_validation.max_duration_ms 不能小于 min_duration_ms")
+			return fmt.Errorf("captcha.track_validation.max_duration_ms cannot be smaller than min_duration_ms")
 		}
 		if err := validatePositiveInt("captcha.track_validation.point_tolerance", cfg.Captcha.TrackValidation.PointTolerance); err != nil {
 			return err
@@ -130,10 +130,10 @@ func validateCaptchaConfigStrict(cfg *CaptchaConfig, env string) error {
 
 	if env == "prod" {
 		if cfg.Redis.Password == "" {
-			return fmt.Errorf("[安全阻断] 生产环境 Redis 密码不能为空")
+			return fmt.Errorf("[security] redis password is required in prod")
 		}
 		if isPlaceholderSecret(cfg.Token.Secret) {
-			return fmt.Errorf("[安全阻断] 生产环境 Token 密钥未设置或使用默认占位值")
+			return fmt.Errorf("[security] token secret is missing or still set to a placeholder in prod")
 		}
 	}
 

@@ -1,8 +1,3 @@
-# ===============================================================
-# Captcha Service - Development Profile
-# Local defaults. Runtime values may be overridden by .env or env vars.
-# ===============================================================
-
 http:
   port: 8091
 
@@ -25,23 +20,18 @@ captcha:
   graph_size_min: 52
   graph_size_max: 64
   slider_tolerance: 10
-
   image_pool:
     enabled: false
     pool_size: 100
     refresh_interval_minutes: 60
-
   track_validation:
     enabled: false
     min_points: 10
     min_duration_ms: 500
     max_duration_ms: 20000
     point_tolerance: 20
-
   external_image_api:
-    # Env override: CAPTCHA_CAPTCHA_EXTERNAL_IMAGE_API_URL
-    url: ""
-    # Env override: CAPTCHA_CAPTCHA_EXTERNAL_IMAGE_API_API_KEY
+    url: "https://file.example.com/image"
     api_key: ""
     timeout_seconds: 30
     rate_limit_per_minute: 100
@@ -49,20 +39,14 @@ captcha:
 
 token:
   ttl_seconds: 600
-  # Env override: CAPTCHA_TOKEN_SECRET
-  secret: "dev_default_secret_key"
+  secret: "file-secret"
 
 nacos:
   enable: false
   server_addr: "127.0.0.1:8848"
-  # Env override: CAPTCHA_NACOS_NAMESPACE
   namespace: ""
   service_name: "captcha-service"
   group_name: "DEFAULT_GROUP"
   cluster_name: "dev-cluster"
   register_ip: ""
   weight: 1.0
-  metadata:
-    version: "1.0.0"
-    protocol: "http"
-    env: "dev"

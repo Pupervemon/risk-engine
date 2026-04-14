@@ -31,7 +31,6 @@ func newServiceViper(serviceName string, servicePrefix string, options LoadOptio
 
 	bindings := make(envBindings)
 	collectStructBindings(bindings, reflect.TypeOf(sample), nil, servicePrefix)
-	addCommonEnvAliases(bindings, servicePrefix)
 	addLegacyEnvAliases(bindings, serviceName)
 
 	if err := applyBindings(v, bindings); err != nil {
@@ -53,9 +52,9 @@ func newServiceViper(serviceName string, servicePrefix string, options LoadOptio
 
 	if err := v.ReadInConfig(); err != nil {
 		if configFile != "" {
-			return nil, "", fmt.Errorf("读取配置文件 %s 失败: %w", configFile, err)
+			return nil, "", fmt.Errorf("read config file %s: %w", configFile, err)
 		}
-		return nil, "", fmt.Errorf("读取配置文件 %s.%s.yaml 失败: %w", serviceName, env, err)
+		return nil, "", fmt.Errorf("read config file %s.%s.yaml: %w", serviceName, env, err)
 	}
 
 	return v, env, nil
@@ -150,22 +149,7 @@ func formatEnvName(parts ...string) string {
 	return strings.Join(segments, "_")
 }
 
-// addCommonEnvAliases 为 Nacos 和基础服务端口添加通用的环境变量别名。
-func addCommonEnvAliases(bindings envBindings, servicePrefix string) {
-	addBinding(bindings, "http.port", formatEnvName(servicePrefix, "server", "http", "port"))
-	addBinding(bindings, "grpc.port", formatEnvName(servicePrefix, "server", "grpc", "port"))
-
-	addBinding(bindings, "nacos.enable", formatEnvName(servicePrefix, "registry", "nacos", "enable"))
-	addBinding(bindings, "nacos.server_addr", formatEnvName(servicePrefix, "registry", "nacos", "server_addr"))
-	addBinding(bindings, "nacos.namespace", formatEnvName(servicePrefix, "registry", "nacos", "namespace"))
-	addBinding(bindings, "nacos.service_name", formatEnvName(servicePrefix, "registry", "nacos", "service_name"))
-	addBinding(bindings, "nacos.group_name", formatEnvName(servicePrefix, "registry", "nacos", "group_name"))
-	addBinding(bindings, "nacos.cluster_name", formatEnvName(servicePrefix, "registry", "nacos", "cluster_name"))
-	addBinding(bindings, "nacos.register_ip", formatEnvName(servicePrefix, "registry", "nacos", "register_ip"))
-	addBinding(bindings, "nacos.weight", formatEnvName(servicePrefix, "registry", "nacos", "weight"))
-}
-
-// addLegacyEnvAliases 添加旧版的、扁平的环境变量绑定，确保平滑迁移。
+// addLegacyEnvAliases preserves support for older flat env names during migration.
 func addLegacyEnvAliases(bindings envBindings, serviceName string) {
 	addBinding(bindings, "redis.addr", "REDIS_ADDR")
 	addBinding(bindings, "redis.password", "REDIS_PASSWORD")
@@ -191,7 +175,7 @@ func addLegacyEnvAliases(bindings envBindings, serviceName string) {
 	}
 }
 
-// addBinding 安全地向绑定映射中添加一个新的环境变量规则。
+// addBinding safely appends a new env binding rule if it is not already present.
 func addBinding(bindings envBindings, key string, envName string) {
 	if key == "" || envName == "" {
 		return
@@ -206,14 +190,13 @@ func addBinding(bindings envBindings, key string, envName string) {
 	bindings[key] = append(bindings[key], envName)
 }
 
-// applyBindings 将收集到的所有绑定规则应用到 viper 实例。
+// applyBindings attaches all collected env bindings to the viper instance.
 func applyBindings(v *viper.Viper, bindings envBindings) error {
 	for key, envNames := range bindings {
 		args := append([]string{key}, envNames...)
 		if err := v.BindEnv(args...); err != nil {
-			return fmt.Errorf("绑定环境变量 %s 失败: %w", key, err)
+			return fmt.Errorf("bind env for %s: %w", key, err)
 		}
 	}
 	return nil
 }
-

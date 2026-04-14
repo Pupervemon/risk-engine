@@ -3,6 +3,8 @@ package transport
 import "fmt"
 
 // ServiceInfo describes the runtime service metadata exposed by helper endpoints.
+// Empty or missing fields are rendered as unknown so callers can clearly see
+// that the metadata was not configured.
 type ServiceInfo struct {
 	Name        string
 	Version     string
@@ -14,30 +16,30 @@ type ServiceInfo struct {
 
 func (s ServiceInfo) normalized() ServiceInfo {
 	if s.Name == "" {
-		s.Name = "risk-service"
+		s.Name = "unknown"
 	}
 	if s.Version == "" {
-		s.Version = "1.0.0"
+		s.Version = "unknown"
 	}
 	if s.Protocol == "" {
-		s.Protocol = "grpc"
+		s.Protocol = "unknown"
 	}
 	if s.Description == "" {
-		s.Description = "Risk Engine - 风控引擎服务"
+		s.Description = "unknown"
 	}
 	return s
 }
 
 func (s ServiceInfo) grpcEndpoint() string {
 	if s.GRPCPort <= 0 {
-		return "disabled"
+		return "unknown"
 	}
 	return fmt.Sprintf("port %d", s.GRPCPort)
 }
 
 func (s ServiceInfo) httpEndpoint() string {
 	if s.HTTPPort <= 0 {
-		return "disabled"
+		return "unknown"
 	}
 	return fmt.Sprintf("port %d", s.HTTPPort)
 }

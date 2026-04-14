@@ -1,0 +1,627 @@
+{
+    "schemes": [
+        "http"
+    ],
+    "swagger": "2.0",
+    "info": {
+        "description": "HTTP endpoints for health checks, service metadata, and risk admin insight queries.",
+        "title": "Risk Service HTTP API",
+        "contact": {},
+        "version": "1.0.0"
+    },
+    "basePath": "/",
+    "paths": {
+        "/api/v1/admin/risk-ips": {
+            "get": {
+                "description": "Returns paginated risk IP insight records. When q is provided, it is treated as an exact IP lookup.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Risk Admin"
+                ],
+                "summary": "List risk IP insights",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Authenticated user ID",
+                        "name": "user_id",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Authenticated role list. Supports comma-separated values or JSON array. Must include 2 (teacher) or 3 (admin).",
+                        "name": "user_roles",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Page size. Defaults to 20 and is capped at 100.",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Pagination offset. Defaults to 0.",
+                        "name": "offset",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Exact IP filter.",
+                        "name": "q",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/transport.RiskIPListResponseDoc"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/transport.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/transport.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/transport.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/transport.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/admin/risk-ips/{ip}": {
+            "get": {
+                "description": "Returns the aggregated insight profile for a single risk IP.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Risk Admin"
+                ],
+                "summary": "Get risk IP insight",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Authenticated user ID",
+                        "name": "user_id",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Authenticated role list. Supports comma-separated values or JSON array. Must include 2 (teacher) or 3 (admin).",
+                        "name": "user_roles",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Risk IP address",
+                        "name": "ip",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/transport.RiskIPDetailDoc"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/transport.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/transport.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/transport.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/transport.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/transport.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/admin/risk-ips/{ip}/events": {
+            "get": {
+                "description": "Returns paginated event history for a single risk IP.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Risk Admin"
+                ],
+                "summary": "List risk IP events",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Authenticated user ID",
+                        "name": "user_id",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Authenticated role list. Supports comma-separated values or JSON array. Must include 2 (teacher) or 3 (admin).",
+                        "name": "user_roles",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Risk IP address",
+                        "name": "ip",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Page size. Defaults to 50 and is capped at 200.",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Pagination offset. Defaults to 0.",
+                        "name": "offset",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/transport.RiskIPEventsResponseDoc"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/transport.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/transport.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/transport.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/transport.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/transport.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/health": {
+            "get": {
+                "description": "Returns overall service health and dependency status.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Health"
+                ],
+                "summary": "Service health check",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/transport.HealthResponseDoc"
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "$ref": "#/definitions/transport.HealthResponseDoc"
+                        }
+                    }
+                }
+            }
+        },
+        "/info": {
+            "get": {
+                "description": "Returns service name, version, protocol, and exposed endpoints.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Service Info"
+                ],
+                "summary": "Service metadata",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/transport.ServiceInfoResponse"
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "definitions": {
+        "transport.ErrorResponse": {
+            "type": "object",
+            "properties": {
+                "error": {
+                    "type": "string"
+                }
+            }
+        },
+        "transport.HealthComponentDoc": {
+            "type": "object",
+            "properties": {
+                "message": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                }
+            }
+        },
+        "transport.HealthResponseDoc": {
+            "type": "object",
+            "properties": {
+                "components": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "$ref": "#/definitions/transport.HealthComponentDoc"
+                    }
+                },
+                "status": {
+                    "type": "string"
+                },
+                "timestamp": {
+                    "type": "string"
+                }
+            }
+        },
+        "transport.RiskIPDetailDoc": {
+            "type": "object",
+            "properties": {
+                "blacklist_expire_at": {
+                    "type": "string"
+                },
+                "blacklist_reason": {
+                    "type": "string"
+                },
+                "blacklisted": {
+                    "type": "boolean"
+                },
+                "current_login_fail_count": {
+                    "type": "integer"
+                },
+                "current_login_fail_expire_at": {
+                    "type": "string"
+                },
+                "event_count": {
+                    "type": "integer"
+                },
+                "first_seen_at": {
+                    "type": "string"
+                },
+                "flags": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "ip": {
+                    "type": "string"
+                },
+                "last_action": {
+                    "type": "string"
+                },
+                "last_reason": {
+                    "type": "string"
+                },
+                "last_req_id": {
+                    "type": "string"
+                },
+                "last_scene": {
+                    "type": "string"
+                },
+                "last_seen_at": {
+                    "type": "string"
+                },
+                "latest_user_id_masked": {
+                    "type": "string"
+                },
+                "severity": {
+                    "type": "string"
+                },
+                "total_blacklist_hits": {
+                    "type": "integer"
+                },
+                "total_checks": {
+                    "type": "integer"
+                },
+                "total_rejects": {
+                    "type": "integer"
+                },
+                "total_report_failure": {
+                    "type": "integer"
+                },
+                "total_report_success": {
+                    "type": "integer"
+                },
+                "total_verifies": {
+                    "type": "integer"
+                }
+            }
+        },
+        "transport.RiskIPEventDoc": {
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string"
+                },
+                "blacklist_expire_at": {
+                    "type": "string"
+                },
+                "current_blacklisted": {
+                    "type": "boolean"
+                },
+                "event_id": {
+                    "type": "string"
+                },
+                "event_type": {
+                    "type": "string"
+                },
+                "ip": {
+                    "type": "string"
+                },
+                "login_fail_count": {
+                    "type": "integer"
+                },
+                "occurred_at": {
+                    "type": "string"
+                },
+                "occurred_at_unix": {
+                    "type": "integer"
+                },
+                "reason": {
+                    "type": "string"
+                },
+                "received": {
+                    "type": "boolean"
+                },
+                "req_id": {
+                    "type": "string"
+                },
+                "scene": {
+                    "type": "string"
+                },
+                "user_id_masked": {
+                    "type": "string"
+                }
+            }
+        },
+        "transport.RiskIPEventsResponseDoc": {
+            "type": "object",
+            "properties": {
+                "has_more": {
+                    "type": "boolean"
+                },
+                "ip": {
+                    "type": "string"
+                },
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/transport.RiskIPEventDoc"
+                    }
+                },
+                "limit": {
+                    "type": "integer"
+                },
+                "offset": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "transport.RiskIPListResponseDoc": {
+            "type": "object",
+            "properties": {
+                "has_more": {
+                    "type": "boolean"
+                },
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/transport.RiskIPSummaryDoc"
+                    }
+                },
+                "limit": {
+                    "type": "integer"
+                },
+                "offset": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "transport.RiskIPSummaryDoc": {
+            "type": "object",
+            "properties": {
+                "blacklist_expire_at": {
+                    "type": "string"
+                },
+                "blacklist_reason": {
+                    "type": "string"
+                },
+                "blacklisted": {
+                    "type": "boolean"
+                },
+                "current_login_fail_count": {
+                    "type": "integer"
+                },
+                "current_login_fail_expire_at": {
+                    "type": "string"
+                },
+                "first_seen_at": {
+                    "type": "string"
+                },
+                "flags": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "ip": {
+                    "type": "string"
+                },
+                "last_action": {
+                    "type": "string"
+                },
+                "last_reason": {
+                    "type": "string"
+                },
+                "last_req_id": {
+                    "type": "string"
+                },
+                "last_scene": {
+                    "type": "string"
+                },
+                "last_seen_at": {
+                    "type": "string"
+                },
+                "latest_user_id_masked": {
+                    "type": "string"
+                },
+                "severity": {
+                    "type": "string"
+                },
+                "total_blacklist_hits": {
+                    "type": "integer"
+                },
+                "total_checks": {
+                    "type": "integer"
+                },
+                "total_rejects": {
+                    "type": "integer"
+                },
+                "total_report_failure": {
+                    "type": "integer"
+                },
+                "total_report_success": {
+                    "type": "integer"
+                },
+                "total_verifies": {
+                    "type": "integer"
+                }
+            }
+        },
+        "transport.ServiceEndpointsResponse": {
+            "type": "object",
+            "properties": {
+                "admin_riskip": {
+                    "type": "string"
+                },
+                "grpc": {
+                    "type": "string"
+                },
+                "health": {
+                    "type": "string"
+                },
+                "http": {
+                    "type": "string"
+                }
+            }
+        },
+        "transport.ServiceInfoResponse": {
+            "type": "object",
+            "properties": {
+                "description": {
+                    "type": "string"
+                },
+                "endpoints": {
+                    "$ref": "#/definitions/transport.ServiceEndpointsResponse"
+                },
+                "protocol": {
+                    "type": "string"
+                },
+                "service": {
+                    "type": "string"
+                },
+                "version": {
+                    "type": "string"
+                }
+            }
+        }
+    },
+    "tags": [
+        {
+            "description": "Service health probe.",
+            "name": "Health"
+        },
+        {
+            "description": "Runtime metadata and exposed endpoint information.",
+            "name": "Service Info"
+        },
+        {
+            "description": "Admin-only interfaces for querying risk IP summaries and event history.",
+            "name": "Risk Admin"
+        }
+    ]
+}

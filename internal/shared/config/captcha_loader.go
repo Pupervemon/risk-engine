@@ -5,19 +5,19 @@ import (
 	"strconv"
 )
 
-// LoadCaptchaConfigWithOptions 根据显式的配置和环境变量覆盖加载验证码服务配置。
+// LoadCaptchaConfigWithOptions loads Captcha config with explicit config and env overrides.
 func LoadCaptchaConfigWithOptions(options LoadOptions) (*CaptchaConfig, error) {
 	v, env, err := newServiceViper("captcha", "CAPTCHA", options, CaptchaConfig{})
 	if err != nil {
 		return nil, err
 	}
 
-	fmt.Printf("[CaptchaConfig] 正在加载环境: %s\n", env)
-	fmt.Printf("[CaptchaConfig] 使用配置文件: %s\n", v.ConfigFileUsed())
+	fmt.Printf("[CaptchaConfig] loading environment: %s\n", env)
+	fmt.Printf("[CaptchaConfig] using config file: %s\n", v.ConfigFileUsed())
 
 	var cfg CaptchaConfig
 	if err := v.Unmarshal(&cfg); err != nil {
-		return nil, fmt.Errorf("解析配置结构失败: %w", err)
+		return nil, fmt.Errorf("unmarshal captcha config: %w", err)
 	}
 
 	if cfg.Nacos.Enable {

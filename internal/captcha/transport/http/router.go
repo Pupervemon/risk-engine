@@ -7,12 +7,11 @@ import (
 	"go.uber.org/zap"
 )
 
-// NewCaptchaRouter 创建验证码服务的HTTP路由
+// NewCaptchaRouter builds the HTTP router for the captcha service.
 func NewCaptchaRouter(handler *CaptchaHandler, healthHandler *HealthHandler) *gin.Engine {
 	router := gin.New()
 	router.Use(gin.Recovery())
 
-	// 请求日志中间件（过滤浏览器自动请求）
 	router.Use(func(c *gin.Context) {
 		start := time.Now()
 		path := c.Request.URL.Path
@@ -20,7 +19,6 @@ func NewCaptchaRouter(handler *CaptchaHandler, healthHandler *HealthHandler) *gi
 
 		c.Next()
 
-		// 跳过浏览器自动请求的日志
 		ignorePaths := []string{
 			"/favicon.ico",
 			"/.well-known/appspecific/com.chrome.devtools.json",
@@ -31,7 +29,7 @@ func NewCaptchaRouter(handler *CaptchaHandler, healthHandler *HealthHandler) *gi
 			}
 		}
 
-		handler.Logger.Info("接收到请求",
+		handler.Logger.Info("http request",
 			zap.String("method", c.Request.Method),
 			zap.String("path", path),
 			zap.String("query", query),
@@ -40,15 +38,12 @@ func NewCaptchaRouter(handler *CaptchaHandler, healthHandler *HealthHandler) *gi
 		)
 	})
 
-	// API 路由组
 	api := router.Group("/api/v1")
 	{
-		// 验证码相关接口
 		api.GET("/captcha", handler.GetCaptcha)
 		api.POST("/captcha/verify", handler.VerifyCaptcha)
 	}
 
-	// 健康检查路由
 	router.GET("/health", healthHandler.Health)
 	router.GET("/actuator/health", healthHandler.DetailedHealth)
 	router.GET("/actuator/health/liveness", healthHandler.Liveness)
