@@ -1,165 +1,325 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>验证码服务测试</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <title>Captcha Web Test</title>
     <style>
-        .captcha-container {
-            width: 320px;
-            position: relative;
-            user-select: none;
+        :root {
+            color-scheme: light;
+            font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+            background: linear-gradient(180deg, #f4f7fb 0%, #e7eef8 100%);
+            color: #10233f;
         }
 
-        .slider-bar {
-            height: 40px;
-            background: #f0f0f0;
-            border-radius: 4px;
-            border: 1px solid #e4e4e4;
-            position: relative;
+        * {
+            box-sizing: border-box;
         }
 
-        .slider-handle {
-            width: 40px;
-            height: 40px;
-            background: #fff;
-            box-shadow: 0 0 3px rgba(0, 0, 0, 0.3);
-            cursor: pointer;
-            position: absolute;
-            top: -1px;
-            left: 0;
+        body {
+            margin: 0;
+            min-height: 100vh;
             display: flex;
             align-items: center;
             justify-content: center;
-            transition: background 0.2s;
-            z-index: 10;
+            padding: 24px;
+            background:
+                radial-gradient(circle at top left, rgba(74, 144, 226, 0.18), transparent 30%),
+                radial-gradient(circle at bottom right, rgba(16, 185, 129, 0.16), transparent 28%),
+                linear-gradient(180deg, #f4f7fb 0%, #e7eef8 100%);
         }
 
-        .slider-handle:hover {
-            background: #1890ff;
+        .panel {
+            width: min(420px, 100%);
+            background: rgba(255, 255, 255, 0.94);
+            border: 1px solid rgba(16, 35, 63, 0.08);
+            border-radius: 18px;
+            box-shadow: 0 20px 50px rgba(16, 35, 63, 0.14);
+            padding: 28px;
+            backdrop-filter: blur(10px);
+        }
+
+        h1 {
+            margin: 0 0 6px;
+            font-size: 24px;
+            line-height: 1.2;
+        }
+
+        .subtitle {
+            margin: 0 0 22px;
+            color: #52637a;
+            font-size: 14px;
+        }
+
+        .api-row {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 18px;
+        }
+
+        .api-row input {
+            flex: 1;
+            min-width: 0;
+            border: 1px solid #cdd8e6;
+            border-radius: 10px;
+            padding: 11px 12px;
+            font-size: 14px;
+            color: #10233f;
+            background: #fdfefe;
+        }
+
+        .api-row button,
+        .actions button {
+            border: 0;
+            border-radius: 10px;
+            padding: 11px 14px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+        }
+
+        .api-row button:hover,
+        .actions button:hover {
+            transform: translateY(-1px);
+        }
+
+        .primary-btn {
+            background: #0f6fff;
+            color: #fff;
+            box-shadow: 0 10px 20px rgba(15, 111, 255, 0.18);
+        }
+
+        .secondary-btn {
+            background: #10233f;
             color: #fff;
         }
 
-        .slider-track {
-            height: 38px;
-            background: #d1e9ff;
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 0;
+        .api-display {
+            margin-bottom: 16px;
+            font-size: 13px;
+            color: #52637a;
+            word-break: break-all;
         }
 
-        .captcha-img-container {
+        .captcha-wrap {
+            width: 320px;
+            max-width: 100%;
+            margin: 0 auto;
+        }
+
+        .image-box {
             position: relative;
-            margin-bottom: 10px;
+            width: 320px;
+            height: 180px;
+            max-width: 100%;
+            margin: 0 auto 12px;
             overflow: hidden;
+            border-radius: 12px;
+            background: #edf3fb;
+            border: 1px solid #dce7f5;
             display: none;
-            border-radius: 4px;
+        }
+
+        .image-box img {
+            display: block;
+            user-select: none;
+            -webkit-user-drag: none;
         }
 
         #master-img {
             width: 320px;
             height: 180px;
-            display: block;
         }
 
         #tile-img {
             position: absolute;
+            top: 0;
             left: 0;
             z-index: 2;
+            pointer-events: none;
+        }
+
+        .slider-bar {
+            position: relative;
+            height: 44px;
+            border-radius: 999px;
+            background: #eef4fb;
+            border: 1px solid #d8e4f2;
+            overflow: hidden;
+        }
+
+        .slider-track {
+            position: absolute;
+            inset: 0 auto 0 0;
+            width: 0;
+            background: linear-gradient(90deg, #d8ebff 0%, #c4e3ff 100%);
+        }
+
+        .slider-text {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #6b7d96;
+            font-size: 14px;
+            pointer-events: none;
+        }
+
+        .slider-handle {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 44px;
+            height: 44px;
+            border: 0;
+            border-radius: 999px;
+            background: #fff;
+            color: #10233f;
+            box-shadow: 0 8px 20px rgba(16, 35, 63, 0.18);
+            cursor: grab;
+            z-index: 3;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .slider-handle:active {
+            cursor: grabbing;
+        }
+
+        .status {
+            min-height: 20px;
+            margin-top: 16px;
+            text-align: center;
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .status.info {
+            color: #0f6fff;
+        }
+
+        .status.success {
+            color: #059669;
+        }
+
+        .status.error {
+            color: #dc2626;
+        }
+
+        .status.muted {
+            color: #52637a;
+        }
+
+        .actions {
+            margin-top: 18px;
+        }
+
+        .actions button {
+            width: 100%;
+        }
+
+        .tips {
+            margin-top: 16px;
+            color: #6b7d96;
+            font-size: 12px;
+            line-height: 1.5;
         }
     </style>
 </head>
+<body>
+    <main class="panel">
+        <h1>Captcha Test Page</h1>
+        <p class="subtitle">Default API base: <code>http://localhost:8091/api/v1</code></p>
 
-<body class="bg-gray-100 flex items-center justify-center h-screen">
-    <div class="bg-white p-8 rounded-lg shadow-md w-[384px]">
-        <h1 class="text-xl font-bold mb-6 text-center text-gray-800">验证码服务验证</h1>
+        <div class="api-row">
+            <input id="api-base-input" type="text" placeholder="http://localhost:8091/api/v1">
+            <button id="save-api-btn" class="secondary-btn" type="button">Save</button>
+        </div>
 
-        <div class="captcha-container mx-auto" id="captcha-box">
-            <div class="captcha-img-container" id="img-container">
-                <img id="master-img" src="" alt="背景图">
-                <img id="tile-img" src="" alt="滑块图">
+        <div class="api-display">Current API base: <span id="api-url"></span></div>
+
+        <section class="captcha-wrap">
+            <div class="image-box" id="img-container">
+                <img id="master-img" src="" alt="captcha background">
+                <img id="tile-img" src="" alt="captcha slider">
             </div>
 
             <div class="slider-bar">
                 <div class="slider-track" id="slider-track"></div>
-                <div class="slider-handle" id="slider-handle">
-                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                            d="M13 5l7 7-7 7M5 5l7 7-7 7"></path>
-                    </svg>
-                </div>
-                <div
-                    class="absolute inset-0 flex items-center justify-center text-sm text-gray-400 pointer-events-none">
-                    向右滑动完成验证
-                </div>
+                <div class="slider-text" id="slider-text">Slide right to verify</div>
+                <button class="slider-handle" id="slider-handle" type="button" aria-label="slider">
+                    &raquo;
+                </button>
             </div>
+        </section>
+
+        <div class="status muted" id="status">Waiting for captcha...</div>
+
+        <div class="actions">
+            <button id="refresh-btn" class="primary-btn" type="button">Refresh Captcha</button>
         </div>
 
-        <div id="status" class="mt-4 text-center text-sm font-medium h-5"></div>
-        <button id="refresh-btn"
-            class="mt-6 w-full py-2 bg-blue-500 hover:bg-blue-600 rounded text-white font-medium transition">刷新验证码</button>
-
-        <div class="mt-4 text-xs text-gray-400 text-center">
-            后端地址: <span id="api-url"></span>
+        <div class="tips">
+            If you open this file directly in the browser, the backend must allow CORS.
         </div>
-        <div class="mt-3 flex gap-2">
-            <input id="api-base-input" type="text"
-                class="flex-1 rounded border border-gray-300 px-3 py-2 text-sm text-gray-700"
-                placeholder="http://localhost:8091/api/v1">
-            <button id="save-api-btn"
-                class="rounded bg-slate-700 px-3 py-2 text-sm text-white transition hover:bg-slate-800">保存</button>
-        </div>
-    </div>
+    </main>
 
     <script>
-        const API_BASE_STORAGE_KEY = 'captcha_api_base';
-        const DEFAULT_API_BASE = 'http://localhost:8091/api/v1';
-        let captchaId = '';
-        let startX = 0;
-        let isMoving = false;
-        let currentX = 0;
-        let requireMouseTrack = false; // 是否需要鼠标轨迹
-        let mouseTrack = []; // 鼠标轨迹数据
-        let trackStartTime = 0; // 轨迹开始时间
+        const API_BASE_STORAGE_KEY = "captcha_api_base";
+        const DEFAULT_API_BASE = "http://localhost:8091/api/v1";
+        const CAPTCHA_WIDTH = 320;
+        const HANDLE_WIDTH = 44;
+        const MAX_SLIDE = CAPTCHA_WIDTH - HANDLE_WIDTH;
 
-        const handle = document.getElementById('slider-handle');
-        const track = document.getElementById('slider-track');
-        const tile = document.getElementById('tile-img');
-        const status = document.getElementById('status');
-        const imgContainer = document.getElementById('img-container');
-        const apiUrl = document.getElementById('api-url');
-        const apiBaseInput = document.getElementById('api-base-input');
-        const saveApiBtn = document.getElementById('save-api-btn');
         let apiBase = resolveApiBase();
+        let captchaId = "";
+        let requireMouseTrack = false;
+        let isMoving = false;
+        let startX = 0;
+        let currentX = 0;
+        let mouseTrack = [];
+        let trackStartTime = 0;
+
+        const handle = document.getElementById("slider-handle");
+        const track = document.getElementById("slider-track");
+        const tile = document.getElementById("tile-img");
+        const master = document.getElementById("master-img");
+        const status = document.getElementById("status");
+        const imgContainer = document.getElementById("img-container");
+        const apiUrl = document.getElementById("api-url");
+        const apiBaseInput = document.getElementById("api-base-input");
+        const saveApiBtn = document.getElementById("save-api-btn");
+        const refreshBtn = document.getElementById("refresh-btn");
+        const sliderText = document.getElementById("slider-text");
 
         apiBaseInput.value = apiBase;
         apiUrl.textContent = apiBase;
 
         function normalizeApiBase(value) {
-            return value.trim().replace(/\/+$/, '');
+            return String(value || "").trim().replace(/\/+$/, "");
         }
 
         function resolveApiBase() {
             const params = new URLSearchParams(window.location.search);
-            const queryValue = normalizeApiBase(params.get('api') || '');
-            if (queryValue) {
-                localStorage.setItem(API_BASE_STORAGE_KEY, queryValue);
-                return queryValue;
+            const fromQuery = normalizeApiBase(params.get("api"));
+            if (fromQuery) {
+                localStorage.setItem(API_BASE_STORAGE_KEY, fromQuery);
+                return fromQuery;
             }
 
-            const storedValue = normalizeApiBase(localStorage.getItem(API_BASE_STORAGE_KEY) || '');
-            if (storedValue) {
-                return storedValue;
+            const fromStorage = normalizeApiBase(localStorage.getItem(API_BASE_STORAGE_KEY));
+            if (fromStorage) {
+                return fromStorage;
             }
 
             return DEFAULT_API_BASE;
         }
 
-        function updateApiBase(nextValue) {
-            const normalized = normalizeApiBase(nextValue);
+        function updateApiBase(value) {
+            const normalized = normalizeApiBase(value);
             if (!normalized) {
                 return false;
             }
@@ -171,180 +331,223 @@
             return true;
         }
 
-        async function fetchCaptcha() {
-            try {
-                const res = await fetch(`${apiBase}/captcha`);
-                if (!res.ok) throw new Error('后端服务异常');
-                const data = await res.json();
-
-                captchaId = data.captchaId;
-                requireMouseTrack = data.requireMouseTrack || false;
-
-                document.getElementById('master-img').src = data.masterImage;
-                tile.src = data.tileImage;
-                tile.style.top = `${data.targetY}px`;
-                tile.style.left = '0px';
-
-                resetSlider();
-
-                imgContainer.style.display = 'block';
-
-                const trackInfo = requireMouseTrack ? ' (需要轨迹验证)' : '';
-                status.textContent = '验证码加载成功' + trackInfo;
-                status.className = 'mt-4 text-center text-sm font-medium text-blue-500';
-
-                console.log('验证码信息:', {
-                    captchaId,
-                    requireMouseTrack,
-                    expiresIn: data.expiresIn
-                });
-            } catch (err) {
-                console.error('获取验证码失败:', err);
-                status.textContent = `获取失败，请确认后端 ${apiBase} 可访问`;
-                status.className = 'mt-4 text-center text-sm font-medium text-red-500';
-            }
+        function setStatus(message, type) {
+            status.textContent = message;
+            status.className = `status ${type}`;
         }
 
         function resetSlider() {
-            handle.style.left = '0px';
-            track.style.width = '0px';
-            tile.style.left = '0px';
-            handle.style.background = '#fff';
-            handle.style.color = 'currentColor';
+            handle.style.left = "0px";
+            track.style.width = "0px";
+            tile.style.left = "0px";
+            handle.style.background = "#ffffff";
+            handle.style.color = "#10233f";
+            sliderText.textContent = "Slide right to verify";
             currentX = 0;
+            isMoving = false;
             mouseTrack = [];
         }
 
-        handle.onmousedown = (e) => {
-            if (!captchaId) return;
-            isMoving = true;
-            startX = e.clientX;
-            handle.style.transition = 'none';
-            track.style.transition = 'none';
-            tile.style.transition = 'none';
-
-            // 初始化鼠标轨迹
+        function beginTrack() {
             mouseTrack = [];
             trackStartTime = Date.now();
-
-            // 记录起始点
             if (requireMouseTrack) {
-                mouseTrack.push({
-                    x: 0,
-                    y: 0,
-                    t: 0
-                });
+                mouseTrack.push({ x: 0, y: 0, t: 0 });
             }
-        };
+        }
 
-        window.onmousemove = (e) => {
-            if (!isMoving) return;
-            let moveX = e.clientX - startX;
-            if (moveX < 0) moveX = 0;
-            if (moveX > 280) moveX = 280; // 320px 容器 - 40px 滑块
-
-            currentX = moveX;
-            handle.style.left = `${moveX}px`;
-            track.style.width = `${moveX}px`;
-            tile.style.left = `${moveX}px`;
-
-            // 记录鼠标轨迹（如果需要）
-            if (requireMouseTrack) {
-                const time = Date.now() - trackStartTime;
-                mouseTrack.push({
-                    x: Math.round(moveX),
-                    y: 0,
-                    t: time
-                });
-            }
-        };
-
-        window.onmouseup = async () => {
-            if (!isMoving) return;
-            isMoving = false;
-
-            // 记录结束点
-            if (requireMouseTrack) {
-                const time = Date.now() - trackStartTime;
-                mouseTrack.push({
-                    x: Math.round(currentX),
-                    y: 0,
-                    t: time
-                });
-            }
-
-            console.log('验证请求数据:', {
-                captchaId,
-                pointX: Math.round(currentX),
-                pointY: 0,
-                trackPoints: requireMouseTrack ? mouseTrack.length : 0,
-                trackDuration: requireMouseTrack ? (Date.now() - trackStartTime) + 'ms' : 'N/A'
-            });
-
-            try {
-                const requestBody = {
-                    captchaId: captchaId,
-                    pointX: Math.round(currentX),
-                    pointY: 0
-                };
-
-                // 如果需要轨迹，添加轨迹数据
-                if (requireMouseTrack && mouseTrack.length > 0) {
-                    requestBody.mouseTrack = mouseTrack;
-                }
-
-                const res = await fetch(`${apiBase}/captcha/verify`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(requestBody)
-                });
-
-                const data = await res.json();
-                if (res.ok) {
-                    status.textContent = '验证成功！Token: ' + data.token.substring(0, 20) + '...';
-                    status.className = 'mt-4 text-center text-sm font-medium text-green-600';
-                    handle.style.background = '#10b981';
-                    handle.style.color = '#fff';
-
-                    console.log('验证成功:', {
-                        token: data.token,
-                        expiresIn: data.expiresIn
-                    });
-                } else {
-                    const reason = data.reason || '位置不准确';
-                    status.textContent = '验证失败: ' + reason;
-                    status.className = 'mt-4 text-center text-sm font-medium text-red-500';
-
-                    console.warn('验证失败:', {
-                        error: data.error,
-                        reason: reason
-                    });
-
-                    setTimeout(fetchCaptcha, 800);
-                }
-            } catch (err) {
-                console.error('验证请求异常:', err);
-                status.textContent = '验证请求失败';
-                status.className = 'mt-4 text-center text-sm font-medium text-red-500';
-            }
-        };
-
-        document.getElementById('refresh-btn').onclick = fetchCaptcha;
-        saveApiBtn.onclick = async () => {
-            if (!updateApiBase(apiBaseInput.value)) {
-                status.textContent = '请输入有效的 API 地址';
-                status.className = 'mt-4 text-center text-sm font-medium text-red-500';
+        function appendTrackPoint(x) {
+            if (!requireMouseTrack) {
                 return;
             }
 
-            status.textContent = 'API 地址已更新，正在重新加载验证码';
-            status.className = 'mt-4 text-center text-sm font-medium text-slate-600';
-            await fetchCaptcha();
-        };
+            mouseTrack.push({
+                x: Math.round(x),
+                y: 0,
+                t: Date.now() - trackStartTime
+            });
+        }
 
-        // 初始化加载
+        async function readJSON(response) {
+            const text = await response.text();
+            if (!text) {
+                return {};
+            }
+
+            try {
+                return JSON.parse(text);
+            } catch (error) {
+                throw new Error(`Invalid JSON response: ${text}`);
+            }
+        }
+
+        async function fetchCaptcha() {
+            setStatus("Loading captcha...", "muted");
+
+            try {
+                const response = await fetch(`${apiBase}/captcha`, {
+                    method: "GET",
+                    mode: "cors"
+                });
+
+                const data = await readJSON(response);
+                if (!response.ok) {
+                    throw new Error(data.reason || `HTTP ${response.status}`);
+                }
+
+                captchaId = data.captchaId || "";
+                requireMouseTrack = Boolean(data.requireMouseTrack);
+
+                if (!captchaId || !data.masterImage || !data.tileImage) {
+                    throw new Error("Captcha response is missing required fields");
+                }
+
+                master.src = data.masterImage;
+                tile.src = data.tileImage;
+                tile.style.top = `${Number(data.targetY || 0)}px`;
+
+                imgContainer.style.display = "block";
+                resetSlider();
+
+                const extra = requireMouseTrack ? " Mouse track is required." : "";
+                setStatus(`Captcha loaded.${extra}`, "info");
+            } catch (error) {
+                console.error("Failed to fetch captcha:", error);
+                setStatus(`Fetch failed. Check ${apiBase} and browser console.`, "error");
+            }
+        }
+
+        async function verifyCaptcha() {
+            const payload = {
+                captchaId,
+                pointX: Math.round(currentX),
+                pointY: 0
+            };
+
+            if (requireMouseTrack && mouseTrack.length > 0) {
+                payload.mouseTrack = mouseTrack;
+            }
+
+            try {
+                const response = await fetch(`${apiBase}/captcha/verify`, {
+                    method: "POST",
+                    mode: "cors",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                const data = await readJSON(response);
+                if (response.ok) {
+                    handle.style.background = "#10b981";
+                    handle.style.color = "#ffffff";
+                    sliderText.textContent = "Verified";
+                    setStatus(`Verify success. Token: ${(data.token || "").slice(0, 20)}...`, "success");
+                    return;
+                }
+
+                handle.style.background = "#ffffff";
+                handle.style.color = "#10233f";
+                setStatus(`Verify failed: ${data.reason || `HTTP ${response.status}`}`, "error");
+                setTimeout(fetchCaptcha, 800);
+            } catch (error) {
+                console.error("Verify request failed:", error);
+                setStatus("Verify request failed. Check browser console.", "error");
+                setTimeout(fetchCaptcha, 800);
+            }
+        }
+
+        function handlePointerMove(clientX) {
+            if (!isMoving) {
+                return;
+            }
+
+            let moveX = clientX - startX;
+            if (moveX < 0) {
+                moveX = 0;
+            }
+            if (moveX > MAX_SLIDE) {
+                moveX = MAX_SLIDE;
+            }
+
+            currentX = moveX;
+            handle.style.left = `${moveX}px`;
+            track.style.width = `${moveX + HANDLE_WIDTH / 2}px`;
+            tile.style.left = `${moveX}px`;
+            appendTrackPoint(moveX);
+        }
+
+        handle.addEventListener("mousedown", (event) => {
+            if (!captchaId) {
+                return;
+            }
+
+            isMoving = true;
+            startX = event.clientX - currentX;
+            beginTrack();
+            appendTrackPoint(currentX);
+        });
+
+        window.addEventListener("mousemove", (event) => {
+            handlePointerMove(event.clientX);
+        });
+
+        window.addEventListener("mouseup", async () => {
+            if (!isMoving) {
+                return;
+            }
+
+            isMoving = false;
+            appendTrackPoint(currentX);
+            await verifyCaptcha();
+        });
+
+        handle.addEventListener("touchstart", (event) => {
+            if (!captchaId) {
+                return;
+            }
+
+            const touch = event.touches[0];
+            isMoving = true;
+            startX = touch.clientX - currentX;
+            beginTrack();
+            appendTrackPoint(currentX);
+        }, { passive: true });
+
+        window.addEventListener("touchmove", (event) => {
+            if (!isMoving || event.touches.length === 0) {
+                return;
+            }
+
+            handlePointerMove(event.touches[0].clientX);
+        }, { passive: true });
+
+        window.addEventListener("touchend", async () => {
+            if (!isMoving) {
+                return;
+            }
+
+            isMoving = false;
+            appendTrackPoint(currentX);
+            await verifyCaptcha();
+        });
+
+        saveApiBtn.addEventListener("click", async () => {
+            if (!updateApiBase(apiBaseInput.value)) {
+                setStatus("Please provide a valid API base URL.", "error");
+                return;
+            }
+
+            resetSlider();
+            imgContainer.style.display = "none";
+            setStatus("API base updated. Reloading captcha...", "muted");
+            await fetchCaptcha();
+        });
+
+        refreshBtn.addEventListener("click", fetchCaptcha);
+
         fetchCaptcha();
     </script>
 </body>
-
 </html>
