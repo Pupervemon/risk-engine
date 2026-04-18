@@ -1,7 +1,6 @@
 package http
 
 import (
-	"net/http"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -12,7 +11,6 @@ import (
 func NewCaptchaRouter(handler *CaptchaHandler, imageSourceHandler *ImageSourceAdminHandler, healthHandler *HealthHandler, adminAuth gin.HandlerFunc) *gin.Engine {
 	router := gin.New()
 	router.Use(gin.Recovery())
-	router.Use(corsMiddleware())
 
 	router.Use(func(c *gin.Context) {
 		start := time.Now()
@@ -63,20 +61,4 @@ func NewCaptchaRouter(handler *CaptchaHandler, imageSourceHandler *ImageSourceAd
 	router.GET("/actuator/health/readiness", healthHandler.Readiness)
 
 	return router
-}
-
-func corsMiddleware() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		c.Header("Access-Control-Allow-Origin", "*")
-		c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, OPTIONS")
-		c.Header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-User-Id, X-User-Roles")
-		c.Header("Access-Control-Max-Age", "86400")
-
-		if c.Request.Method == http.MethodOptions {
-			c.AbortWithStatus(http.StatusNoContent)
-			return
-		}
-
-		c.Next()
-	}
 }
