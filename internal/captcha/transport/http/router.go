@@ -9,7 +9,7 @@ import (
 )
 
 // NewCaptchaRouter builds the HTTP router for the captcha service.
-func NewCaptchaRouter(handler *CaptchaHandler, healthHandler *HealthHandler) *gin.Engine {
+func NewCaptchaRouter(handler *CaptchaHandler, imageSourceHandler *ImageSourceAdminHandler, healthHandler *HealthHandler, adminAuth gin.HandlerFunc) *gin.Engine {
 	router := gin.New()
 	router.Use(gin.Recovery())
 	router.Use(corsMiddleware())
@@ -44,6 +44,17 @@ func NewCaptchaRouter(handler *CaptchaHandler, healthHandler *HealthHandler) *gi
 	{
 		api.GET("/captcha", handler.GetCaptcha)
 		api.POST("/captcha/verify", handler.VerifyCaptcha)
+
+		admin := api.Group("/admin")
+		if adminAuth != nil {
+			admin.Use(adminAuth)
+		}
+		{
+			admin.GET("/image-source", imageSourceHandler.GetImageSource)
+			admin.POST("/image-source/validate", imageSourceHandler.ValidateImageSource)
+			admin.PUT("/image-source", imageSourceHandler.UpdateImageSource)
+			admin.POST("/image-source/refresh", imageSourceHandler.RefreshImageSource)
+		}
 	}
 
 	router.GET("/health", healthHandler.Health)
@@ -57,8 +68,8 @@ func NewCaptchaRouter(handler *CaptchaHandler, healthHandler *HealthHandler) *gi
 func corsMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		c.Header("Access-Control-Allow-Origin", "*")
-		c.Header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-		c.Header("Access-Control-Allow-Headers", "Content-Type, Authorization")
+		c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, OPTIONS")
+		c.Header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-User-Id, X-User-Roles")
 		c.Header("Access-Control-Max-Age", "86400")
 
 		if c.Request.Method == http.MethodOptions {

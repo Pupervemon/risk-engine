@@ -218,15 +218,15 @@ paths:
       description: Returns paginated risk IP insight records. When q is provided,
         it is treated as an exact IP lookup.
       parameters:
-      - description: Authenticated user ID
+      - description: Authenticated user ID injected by the gateway
         in: header
-        name: user_id
+        name: X-User-Id
         required: true
         type: string
-      - description: Authenticated role list. Supports comma-separated values or JSON
-          array. Must include 2 (teacher) or 3 (admin).
+      - description: Authenticated role list injected by the gateway. Supports comma-separated
+          values or JSON array. Must include 2 (teacher) or 3 (admin).
         in: header
-        name: user_roles
+        name: X-User-Roles
         required: true
         type: string
       - description: Page size. Defaults to 20 and is capped at 100.
@@ -271,15 +271,15 @@ paths:
     get:
       description: Returns the aggregated insight profile for a single risk IP.
       parameters:
-      - description: Authenticated user ID
+      - description: Authenticated user ID injected by the gateway
         in: header
-        name: user_id
+        name: X-User-Id
         required: true
         type: string
-      - description: Authenticated role list. Supports comma-separated values or JSON
-          array. Must include 2 (teacher) or 3 (admin).
+      - description: Authenticated role list injected by the gateway. Supports comma-separated
+          values or JSON array. Must include 2 (teacher) or 3 (admin).
         in: header
-        name: user_roles
+        name: X-User-Roles
         required: true
         type: string
       - description: Risk IP address
@@ -321,15 +321,15 @@ paths:
     get:
       description: Returns paginated event history for a single risk IP.
       parameters:
-      - description: Authenticated user ID
+      - description: Authenticated user ID injected by the gateway
         in: header
-        name: user_id
+        name: X-User-Id
         required: true
         type: string
-      - description: Authenticated role list. Supports comma-separated values or JSON
-          array. Must include 2 (teacher) or 3 (admin).
+      - description: Authenticated role list injected by the gateway. Supports comma-separated
+          values or JSON array. Must include 2 (teacher) or 3 (admin).
         in: header
-        name: user_roles
+        name: X-User-Roles
         required: true
         type: string
       - description: Risk IP address

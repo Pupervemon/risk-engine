@@ -5,36 +5,37 @@ import (
 	"crypto/rand"
 	"fmt"
 	"math/big"
+	"sync"
 	"time"
 
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 )
 
-// ImageMeta 图片元数据
+// ImageMeta contains normalized image data stored in the captcha image pool.
 type ImageMeta struct {
-	ID   string // 唯一标识
-	Data []byte // 图片二进制数据
-	URL  string // 原始URL（用于日志）
+	ID   string
+	Data []byte
+	URL  string
 }
 
-// ImageProvider 图片提供者接口
+// ImageProvider fetches images from an upstream source.
 type ImageProvider interface {
-	// FetchImages 从外部源批量获取图片
 	FetchImages(ctx context.Context, count int) ([]ImageMeta, error)
 }
 
-// RedisImagePool Redis图片池
+// RedisImagePool stores captcha background images in Redis.
 type RedisImagePool struct {
 	rdb           *redis.Client
 	logger        *zap.Logger
 	provider      ImageProvider
-	poolSize      int           // 图片池大小
-	refreshTicker *time.Ticker  // 定时刷新任务
-	stopChan      chan struct{} // 停止信号
+	poolSize      int
+	refreshTicker *time.Ticker
+	stopChan      chan struct{}
+	refreshMu     sync.Mutex
 }
 
-// NewRedisImagePool 创建Redis图片池
+// NewRedisImagePool creates a Redis-backed image pool.
 func NewRedisImagePool(rdb *redis.Client, logger *zap.Logger, provider ImageProvider, poolSize int) *RedisImagePool {
 	return &RedisImagePool{
 		rdb:      rdb,
@@ -45,49 +46,44 @@ func NewRedisImagePool(rdb *redis.Client, logger *zap.Logger, provider ImageProv
 	}
 }
 
-// LoadImages 批量加载图片到Redis
+// LoadImages replaces the current image pool contents with the supplied images.
 func (p *RedisImagePool) LoadImages(ctx context.Context, images []ImageMeta) error {
 	if len(images) == 0 {
 		return fmt.Errorf("no images to load")
 	}
 
-	p.logger.Info("开始加载图片到Redis", zap.Int("count", len(images)))
+	p.logger.Info("loading images into redis", zap.Int("count", len(images)))
 	startTime := time.Now()
 
 	pipe := p.rdb.Pipeline()
 
-	// 清理旧的索引集合和图片数据
 	oldIDs, err := p.rdb.SMembers(ctx, p.indexKey()).Result()
 	if err == nil && len(oldIDs) > 0 {
-		// 删除旧图片
 		for _, oldID := range oldIDs {
 			pipe.Del(ctx, p.imageKey(oldID))
 		}
 		pipe.Del(ctx, p.indexKey())
 	}
 
-	// 写入新图片
 	for _, img := range images {
-		pipe.Set(ctx, p.imageKey(img.ID), img.Data, 0) // 不设置过期时间
+		pipe.Set(ctx, p.imageKey(img.ID), img.Data, 0)
 		pipe.SAdd(ctx, p.indexKey(), img.ID)
 	}
 
-	_, err = pipe.Exec(ctx)
-	if err != nil {
-		p.logger.Error("加载图片到Redis失败", zap.Error(err))
+	if _, err := pipe.Exec(ctx); err != nil {
+		p.logger.Error("failed to load images into redis", zap.Error(err))
 		return err
 	}
 
-	p.logger.Info("图片加载完成",
+	p.logger.Info("images loaded into redis",
 		zap.Int("count", len(images)),
 		zap.Duration("duration", time.Since(startTime)))
 
 	return nil
 }
 
-// GetRandom 随机获取一张图片
+// GetRandom returns a random image from the pool.
 func (p *RedisImagePool) GetRandom(ctx context.Context) ([]byte, error) {
-	// 获取所有图片ID
 	ids, err := p.rdb.SMembers(ctx, p.indexKey()).Result()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get image IDs: %w", err)
@@ -97,15 +93,12 @@ func (p *RedisImagePool) GetRandom(ctx context.Context) ([]byte, error) {
 		return nil, fmt.Errorf("image pool is empty")
 	}
 
-	// 随机选择一个ID
 	randomIdx, err := rand.Int(rand.Reader, big.NewInt(int64(len(ids))))
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate random index: %w", err)
 	}
 
 	selectedID := ids[randomIdx.Int64()]
-
-	// 获取图片数据
 	data, err := p.rdb.Get(ctx, p.imageKey(selectedID)).Bytes()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get image data: %w", err)
@@ -114,40 +107,38 @@ func (p *RedisImagePool) GetRandom(ctx context.Context) ([]byte, error) {
 	return data, nil
 }
 
-// Count 返回当前图片池大小
+// Count returns the current number of images in the pool.
 func (p *RedisImagePool) Count(ctx context.Context) (int64, error) {
 	return p.rdb.SCard(ctx, p.indexKey()).Result()
 }
 
-// StartRefresh 启动定时刷新任务
+// StartRefresh starts the periodic image refresh job.
 func (p *RedisImagePool) StartRefresh(ctx context.Context, interval time.Duration) {
-	p.logger.Info("启动图片池定时刷新任务",
+	p.logger.Info("starting image pool refresh job",
 		zap.Duration("interval", interval),
 		zap.Int("pool_size", p.poolSize))
 
-	// 立即执行一次加载
-	if err := p.refresh(ctx); err != nil {
-		p.logger.Error("初始图片加载失败", zap.Error(err))
+	if err := p.RefreshNow(ctx); err != nil {
+		p.logger.Error("initial image refresh failed", zap.Error(err))
 	}
 
-	// 启动定时任务
 	p.refreshTicker = time.NewTicker(interval)
 	go func() {
 		for {
 			select {
 			case <-p.refreshTicker.C:
-				if err := p.refresh(ctx); err != nil {
-					p.logger.Error("定时刷新图片失败", zap.Error(err))
+				if err := p.RefreshNow(ctx); err != nil {
+					p.logger.Error("scheduled image refresh failed", zap.Error(err))
 				}
 			case <-p.stopChan:
-				p.logger.Info("图片池刷新任务已停止")
+				p.logger.Info("image pool refresh job stopped")
 				return
 			}
 		}
 	}()
 }
 
-// StopRefresh 停止定时刷新任务
+// StopRefresh stops the periodic image refresh job.
 func (p *RedisImagePool) StopRefresh() {
 	if p.refreshTicker != nil {
 		p.refreshTicker.Stop()
@@ -155,28 +146,41 @@ func (p *RedisImagePool) StopRefresh() {
 	close(p.stopChan)
 }
 
-// refresh 执行图片刷新逻辑
-func (p *RedisImagePool) refresh(ctx context.Context) error {
-	p.logger.Info("开始刷新图片池", zap.Int("target_size", p.poolSize))
+// RefreshNow refreshes the pool using the active provider.
+func (p *RedisImagePool) RefreshNow(ctx context.Context) error {
+	return p.RefreshWithProvider(ctx, p.provider)
+}
+
+// RefreshWithProvider refreshes the pool using a supplied provider without replacing the active one.
+func (p *RedisImagePool) RefreshWithProvider(ctx context.Context, provider ImageProvider) error {
+	if provider == nil {
+		return fmt.Errorf("image provider is not configured")
+	}
+
+	p.refreshMu.Lock()
+	defer p.refreshMu.Unlock()
+
+	return p.refreshWithProvider(ctx, provider)
+}
+
+func (p *RedisImagePool) refreshWithProvider(ctx context.Context, provider ImageProvider) error {
+	p.logger.Info("refreshing image pool", zap.Int("target_size", p.poolSize))
 	startTime := time.Now()
 
-	// 获取当前池大小
 	oldCount, _ := p.Count(ctx)
 
-	// 从外部源获取图片
-	images, err := p.provider.FetchImages(ctx, p.poolSize)
+	images, err := provider.FetchImages(ctx, p.poolSize)
 	if err != nil {
 		return fmt.Errorf("failed to fetch images: %w", err)
 	}
 
-	// 加载到Redis
 	if err := p.LoadImages(ctx, images); err != nil {
 		return fmt.Errorf("failed to load images: %w", err)
 	}
 
 	newCount, _ := p.Count(ctx)
 
-	p.logger.Info("图片池刷新完成",
+	p.logger.Info("image pool refreshed",
 		zap.Int64("old_count", oldCount),
 		zap.Int64("new_count", newCount),
 		zap.Duration("duration", time.Since(startTime)))
@@ -184,12 +188,10 @@ func (p *RedisImagePool) refresh(ctx context.Context) error {
 	return nil
 }
 
-// imageKey 生成图片数据的Redis key
 func (p *RedisImagePool) imageKey(imageID string) string {
 	return fmt.Sprintf("captcha:images:%s", imageID)
 }
 
-// indexKey 生成索引集合的Redis key
 func (p *RedisImagePool) indexKey() string {
 	return "captcha:images:index"
 }

@@ -21,8 +21,8 @@
 - BasePath: `/`
 - 返回格式: `application/json`
 - 管理接口需要认证头:
-  `user_id`: 当前用户 ID
-  `user_roles`: 当前用户角色列表，支持逗号分隔或 JSON 数组；必须包含 `2`(teacher) 或 `3`(admin)
+  `X-User-Id`: 网关解析 token 后注入的当前用户 ID
+  `X-User-Roles`: 网关解析 token 后注入的当前用户角色列表，支持逗号分隔或 JSON 数组；必须包含 `2`(teacher) 或 `3`(admin)
 
 ### 2.1 健康检查与服务信息
 

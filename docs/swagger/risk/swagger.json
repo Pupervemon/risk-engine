@@ -24,15 +24,15 @@
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Authenticated user ID",
-                        "name": "user_id",
+                        "description": "Authenticated user ID injected by the gateway",
+                        "name": "X-User-Id",
                         "in": "header",
                         "required": true
                     },
                     {
                         "type": "string",
-                        "description": "Authenticated role list. Supports comma-separated values or JSON array. Must include 2 (teacher) or 3 (admin).",
-                        "name": "user_roles",
+                        "description": "Authenticated role list injected by the gateway. Supports comma-separated values or JSON array. Must include 2 (teacher) or 3 (admin).",
+                        "name": "X-User-Roles",
                         "in": "header",
                         "required": true
                     },
@@ -102,15 +102,15 @@
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Authenticated user ID",
-                        "name": "user_id",
+                        "description": "Authenticated user ID injected by the gateway",
+                        "name": "X-User-Id",
                         "in": "header",
                         "required": true
                     },
                     {
                         "type": "string",
-                        "description": "Authenticated role list. Supports comma-separated values or JSON array. Must include 2 (teacher) or 3 (admin).",
-                        "name": "user_roles",
+                        "description": "Authenticated role list injected by the gateway. Supports comma-separated values or JSON array. Must include 2 (teacher) or 3 (admin).",
+                        "name": "X-User-Roles",
                         "in": "header",
                         "required": true
                     },
@@ -175,15 +175,15 @@
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Authenticated user ID",
-                        "name": "user_id",
+                        "description": "Authenticated user ID injected by the gateway",
+                        "name": "X-User-Id",
                         "in": "header",
                         "required": true
                     },
                     {
                         "type": "string",
-                        "description": "Authenticated role list. Supports comma-separated values or JSON array. Must include 2 (teacher) or 3 (admin).",
-                        "name": "user_roles",
+                        "description": "Authenticated role list injected by the gateway. Supports comma-separated values or JSON array. Must include 2 (teacher) or 3 (admin).",
+                        "name": "X-User-Roles",
                         "in": "header",
                         "required": true
                     },

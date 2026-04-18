@@ -63,6 +63,9 @@ func main() {
 	logger.Info("redis connected")
 
 	captchaService := captchaservice.NewCaptchaService(rdb, &cfg.Captcha, logger)
+	if err := captchaService.EnableRuntimeImageSourceManager(); err != nil {
+		logger.Fatal("failed to enable runtime image source manager", zap.Error(err))
+	}
 	tokenService := captchaservice.NewTokenService(rdb, &cfg.Token)
 	grpcService := captchaservice.NewCaptchaTokenService(tokenService)
 
@@ -78,9 +81,18 @@ func main() {
 		TokenService:   tokenService,
 		Logger:         logger,
 	}
+	imageSourceHandler := &httptransport.ImageSourceAdminHandler{
+		CaptchaService: captchaService,
+		Logger:         logger,
+	}
 
 	healthHandler := httptransport.NewHealthHandler(rdb, logger)
-	router := httptransport.NewCaptchaRouter(httpHandler, healthHandler)
+	router := httptransport.NewCaptchaRouter(
+		httpHandler,
+		imageSourceHandler,
+		healthHandler,
+		httptransport.NewAdminAuthMiddleware(logger, httptransport.RoleAdmin),
+	)
 
 	httpServer := &http.Server{
 		Addr:         fmt.Sprintf(":%d", cfg.HTTP.Port),

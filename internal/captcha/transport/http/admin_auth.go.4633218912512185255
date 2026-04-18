@@ -1,4 +1,4 @@
-package transport
+package http
 
 import (
 	"encoding/json"
@@ -11,75 +11,80 @@ import (
 )
 
 const (
-	RoleStudent = 1
-	RoleTeacher = 2
-	RoleAdmin   = 3
+	RoleAdmin = 3
 
-	principalContextKey = "risk_admin_principal"
-
-	gatewayUserIDHeader    = "X-User-Id"
-	gatewayUserRolesHeader = "X-User-Roles"
+	captchaAdminPrincipalContextKey = "captcha_admin_principal"
+	captchaGatewayUserIDHeader    = "X-User-Id"
+	captchaGatewayUserRolesHeader = "X-User-Roles"
 )
 
-// RequestPrincipal is the authenticated identity injected by the gateway.
-type RequestPrincipal struct {
+// AdminPrincipal is the gateway-injected identity used for captcha admin endpoints.
+type AdminPrincipal struct {
 	UserID string `json:"user_id"`
 	Roles  []int  `json:"roles"`
 }
 
-// RiskAdminAuthMiddleware trusts the gateway-injected identity headers and only
-// performs local presence and role checks.
-func RiskAdminAuthMiddleware(logger *zap.Logger, allowedRoles ...int) gin.HandlerFunc {
+// NewAdminAuthMiddleware trusts the gateway-injected principal headers and only
+// performs local header presence and role checks.
+func NewAdminAuthMiddleware(logger *zap.Logger, allowedRoles ...int) gin.HandlerFunc {
 	if logger == nil {
 		logger = zap.NewNop()
 	}
 
 	return func(c *gin.Context) {
-		principal, err := parseRequestPrincipal(c)
+		principal, err := parseAdminPrincipal(c)
 		if err != nil {
-			logger.Warn("risk admin auth rejected: invalid gateway principal",
+			logger.Warn("captcha admin auth rejected: invalid gateway principal",
 				zap.Error(err),
 				zap.String("path", c.Request.URL.Path))
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "UNAUTHORIZED"})
+			writeJSON(c, http.StatusUnauthorized, errorResponse{
+				Error:  "ADMIN_UNAUTHORIZED",
+				Reason: "INVALID_GATEWAY_PRINCIPAL",
+			})
+			c.Abort()
 			return
 		}
 
 		if !principal.HasAnyRole(allowedRoles...) {
-			logger.Warn("risk admin auth rejected: insufficient role",
+			logger.Warn("captcha admin auth rejected: insufficient role",
 				zap.String("user_id", principal.UserID),
 				zap.Ints("user_roles", principal.Roles),
 				zap.String("path", c.Request.URL.Path))
-			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "FORBIDDEN"})
+			writeJSON(c, http.StatusForbidden, errorResponse{
+				Error:  "ADMIN_FORBIDDEN",
+				Reason: "INSUFFICIENT_ROLE",
+			})
+			c.Abort()
 			return
 		}
 
-		c.Set(principalContextKey, principal)
+		c.Set(captchaAdminPrincipalContextKey, principal)
 		c.Next()
 	}
 }
 
-func parseRequestPrincipal(c *gin.Context) (*RequestPrincipal, error) {
+func parseAdminPrincipal(c *gin.Context) (*AdminPrincipal, error) {
 	if c == nil {
-		return nil, errInvalidPrincipal
+		return nil, errInvalidAdminPrincipal
 	}
 
-	userID := strings.TrimSpace(c.GetHeader(gatewayUserIDHeader))
+	userID := strings.TrimSpace(c.GetHeader(captchaGatewayUserIDHeader))
 	if userID == "" {
-		return nil, errInvalidPrincipal
+		return nil, errInvalidAdminPrincipal
 	}
 
-	roles, err := parseRoleValues(c.Request.Header.Values(gatewayUserRolesHeader))
+	roles, err := parseAdminRoleValues(c.Request.Header.Values(captchaGatewayUserRolesHeader))
 	if err != nil || len(roles) == 0 {
-		return nil, errInvalidPrincipal
+		return nil, errInvalidAdminPrincipal
 	}
 
-	return &RequestPrincipal{
+	return &AdminPrincipal{
 		UserID: userID,
 		Roles:  roles,
 	}, nil
 }
 
-func (p *RequestPrincipal) HasAnyRole(roles ...int) bool {
+func (p *AdminPrincipal) HasAnyRole(roles ...int) bool {
 	if p == nil {
 		return false
 	}
@@ -98,7 +103,7 @@ func (p *RequestPrincipal) HasAnyRole(roles ...int) bool {
 	return false
 }
 
-func parseRoleValues(values []string) ([]int, error) {
+func parseAdminRoleValues(values []string) ([]int, error) {
 	roles := make([]int, 0, len(values))
 	seen := map[int]struct{}{}
 
@@ -111,9 +116,9 @@ func parseRoleValues(values []string) ([]int, error) {
 		var parsed []int
 		var err error
 		if strings.HasPrefix(trimmed, "[") {
-			parsed, err = parseJSONRoles(trimmed)
+			parsed, err = parseAdminJSONRoles(trimmed)
 		} else {
-			parsed, err = parseDelimitedRoles(trimmed)
+			parsed, err = parseAdminDelimitedRoles(trimmed)
 		}
 		if err != nil {
 			return nil, err
@@ -131,7 +136,7 @@ func parseRoleValues(values []string) ([]int, error) {
 	return roles, nil
 }
 
-func parseJSONRoles(raw string) ([]int, error) {
+func parseAdminJSONRoles(raw string) ([]int, error) {
 	var ints []int
 	if err := json.Unmarshal([]byte(raw), &ints); err == nil {
 		return ints, nil
@@ -139,14 +144,14 @@ func parseJSONRoles(raw string) ([]int, error) {
 
 	var stringsValue []string
 	if err := json.Unmarshal([]byte(raw), &stringsValue); err != nil {
-		return nil, errInvalidPrincipal
+		return nil, errInvalidAdminPrincipal
 	}
 
 	roles := make([]int, 0, len(stringsValue))
 	for _, value := range stringsValue {
 		role, err := strconv.Atoi(strings.TrimSpace(value))
 		if err != nil {
-			return nil, errInvalidPrincipal
+			return nil, errInvalidAdminPrincipal
 		}
 		roles = append(roles, role)
 	}
@@ -154,7 +159,7 @@ func parseJSONRoles(raw string) ([]int, error) {
 	return roles, nil
 }
 
-func parseDelimitedRoles(raw string) ([]int, error) {
+func parseAdminDelimitedRoles(raw string) ([]int, error) {
 	parts := strings.Split(raw, ",")
 	roles := make([]int, 0, len(parts))
 	for _, part := range parts {
@@ -165,7 +170,7 @@ func parseDelimitedRoles(raw string) ([]int, error) {
 
 		role, err := strconv.Atoi(trimmed)
 		if err != nil {
-			return nil, errInvalidPrincipal
+			return nil, errInvalidAdminPrincipal
 		}
 		roles = append(roles, role)
 	}
