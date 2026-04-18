@@ -22,6 +22,20 @@ import (
 	"google.golang.org/grpc/reflection"
 )
 
+// To export Swagger docs later, run from the repo root:
+// swag init --parseInternal --outputTypes json,yaml --dir cmd/captcha-server,internal/captcha/transport/http -g main.go -o docs/swagger/captcha
+//
+// @title Captcha Service HTTP API
+// @version 1.0.0
+// @description HTTP endpoints for captcha generation, verification, health checks, and runtime image-source administration.
+// @BasePath /
+// @schemes http
+// @tag.name Captcha
+// @tag.description Endpoints for generating and verifying slider captchas.
+// @tag.name Image Source Admin
+// @tag.description Admin-only endpoints for runtime image-source management.
+// @tag.name Health
+// @tag.description Service health and probe endpoints.
 func main() {
 	configFile := flag.String("config", "", "path to config file")
 	configEnv := flag.String("env", "", "app environment override")

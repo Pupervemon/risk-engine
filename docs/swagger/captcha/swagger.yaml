@@ -1,0 +1,488 @@
+basePath: /
+definitions:
+  http.CaptchaChallengeResponseDoc:
+    properties:
+      captchaId:
+        type: string
+      expiresIn:
+        type: integer
+      masterImage:
+        type: string
+      requireMouseTrack:
+        type: boolean
+      targetY:
+        type: integer
+      tileImage:
+        type: string
+    type: object
+  http.ErrorResponseDoc:
+    properties:
+      error:
+        type: string
+      reason:
+        type: string
+    type: object
+  http.HealthComponentDoc:
+    properties:
+      message:
+        type: string
+      status:
+        type: string
+    type: object
+  http.HealthResponseDoc:
+    properties:
+      components:
+        additionalProperties:
+          $ref: '#/definitions/http.HealthComponentDoc'
+        type: object
+      status:
+        type: string
+      timestamp:
+        type: string
+    type: object
+  http.ImageSourceConfigDoc:
+    properties:
+      apiKeyConfigured:
+        type: boolean
+      rateLimitPerMinute:
+        type: integer
+      retryCount:
+        type: integer
+      timeoutSeconds:
+        type: integer
+      url:
+        type: string
+    type: object
+  http.ImageSourceOperationErrorResponseDoc:
+    properties:
+      error:
+        type: string
+      reason:
+        type: string
+      status:
+        $ref: '#/definitions/http.ImageSourceStatusDoc'
+    type: object
+  http.ImageSourcePatchRequestDoc:
+    properties:
+      apiKey:
+        type: string
+      rateLimitPerMinute:
+        type: integer
+      retryCount:
+        type: integer
+      timeoutSeconds:
+        type: integer
+      url:
+        type: string
+    type: object
+  http.ImageSourceStatusDoc:
+    properties:
+      config:
+        $ref: '#/definitions/http.ImageSourceConfigDoc'
+      enabled:
+        type: boolean
+      lastRefreshError:
+        type: string
+      lastRefreshedAt:
+        type: string
+      lastValidatedAt:
+        type: string
+      lastValidationError:
+        type: string
+      poolImageCount:
+        type: integer
+      poolSize:
+        type: integer
+      updatedAt:
+        type: string
+      version:
+        type: integer
+    type: object
+  http.ImageSourceUpdateRequestDoc:
+    properties:
+      apiKey:
+        type: string
+      rateLimitPerMinute:
+        type: integer
+      retryCount:
+        type: integer
+      timeoutSeconds:
+        type: integer
+      triggerRefresh:
+        type: boolean
+      url:
+        type: string
+    type: object
+  http.ImageSourceValidationResultDoc:
+    properties:
+      config:
+        $ref: '#/definitions/http.ImageSourceConfigDoc'
+      validatedAt:
+        type: string
+    type: object
+  http.ProbeResponseDoc:
+    properties:
+      status:
+        type: string
+      timestamp:
+        type: string
+    type: object
+  http.ReadinessResponseDoc:
+    properties:
+      components:
+        additionalProperties:
+          $ref: '#/definitions/http.HealthComponentDoc'
+        type: object
+      status:
+        type: string
+      timestamp:
+        type: string
+    type: object
+  http.TrackPointDoc:
+    properties:
+      t:
+        type: integer
+      x:
+        type: integer
+      "y":
+        type: integer
+    type: object
+  http.VerifyCaptchaRequestDoc:
+    properties:
+      captchaId:
+        type: string
+      mouseTrack:
+        items:
+          $ref: '#/definitions/http.TrackPointDoc'
+        type: array
+      pointX:
+        type: integer
+      pointY:
+        type: integer
+    type: object
+  http.VerifyCaptchaResponseDoc:
+    properties:
+      expiresIn:
+        type: integer
+      token:
+        type: string
+    type: object
+info:
+  contact: {}
+  description: HTTP endpoints for captcha generation, verification, health checks,
+    and runtime image-source administration.
+  title: Captcha Service HTTP API
+  version: 1.0.0
+paths:
+  /actuator/health:
+    get:
+      description: Returns actuator-style health details, including dependency and
+        disk probe status.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/http.HealthResponseDoc'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/http.HealthResponseDoc'
+      summary: Detailed actuator health check
+      tags:
+      - Health
+  /actuator/health/liveness:
+    get:
+      description: Returns a lightweight liveness status for platform probes.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/http.ProbeResponseDoc'
+      summary: Liveness probe
+      tags:
+      - Health
+  /actuator/health/readiness:
+    get:
+      description: Returns readiness status and dependency details for platform probes.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/http.ReadinessResponseDoc'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/http.ReadinessResponseDoc'
+      summary: Readiness probe
+      tags:
+      - Health
+  /api/v1/admin/image-source:
+    get:
+      description: Returns the current runtime image source configuration and latest
+        validation and refresh state for the captcha image pool.
+      parameters:
+      - description: Authenticated user ID injected by the gateway
+        in: header
+        name: X-User-Id
+        required: true
+        type: string
+      - description: Authenticated role list injected by the gateway. Supports comma-separated
+          values or JSON array. Must include 3 (admin).
+        in: header
+        name: X-User-Roles
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/http.ImageSourceStatusDoc'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/http.ErrorResponseDoc'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/http.ErrorResponseDoc'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/http.ErrorResponseDoc'
+      summary: Get runtime image source status
+      tags:
+      - Image Source Admin
+    put:
+      consumes:
+      - application/json
+      description: Validates, persists, and applies a new runtime image source configuration,
+        with optional immediate image-pool refresh.
+      parameters:
+      - description: Authenticated user ID injected by the gateway
+        in: header
+        name: X-User-Id
+        required: true
+        type: string
+      - description: Authenticated role list injected by the gateway. Supports comma-separated
+          values or JSON array. Must include 3 (admin).
+        in: header
+        name: X-User-Roles
+        required: true
+        type: string
+      - description: Runtime image source update payload
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/http.ImageSourceUpdateRequestDoc'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/http.ImageSourceStatusDoc'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/http.ImageSourceOperationErrorResponseDoc'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/http.ErrorResponseDoc'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/http.ErrorResponseDoc'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/http.ErrorResponseDoc'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/http.ImageSourceOperationErrorResponseDoc'
+        "502":
+          description: Bad Gateway
+          schema:
+            $ref: '#/definitions/http.ImageSourceOperationErrorResponseDoc'
+      summary: Update runtime image source config
+      tags:
+      - Image Source Admin
+  /api/v1/admin/image-source/refresh:
+    post:
+      description: Triggers an immediate refresh of the captcha image pool using the
+        currently active runtime image source configuration.
+      parameters:
+      - description: Authenticated user ID injected by the gateway
+        in: header
+        name: X-User-Id
+        required: true
+        type: string
+      - description: Authenticated role list injected by the gateway. Supports comma-separated
+          values or JSON array. Must include 3 (admin).
+        in: header
+        name: X-User-Roles
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/http.ImageSourceStatusDoc'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/http.ErrorResponseDoc'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/http.ErrorResponseDoc'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/http.ErrorResponseDoc'
+        "502":
+          description: Bad Gateway
+          schema:
+            $ref: '#/definitions/http.ImageSourceOperationErrorResponseDoc'
+      summary: Refresh captcha image pool
+      tags:
+      - Image Source Admin
+  /api/v1/admin/image-source/validate:
+    post:
+      consumes:
+      - application/json
+      description: Validates a candidate upstream image source configuration without
+        applying it.
+      parameters:
+      - description: Authenticated user ID injected by the gateway
+        in: header
+        name: X-User-Id
+        required: true
+        type: string
+      - description: Authenticated role list injected by the gateway. Supports comma-separated
+          values or JSON array. Must include 3 (admin).
+        in: header
+        name: X-User-Roles
+        required: true
+        type: string
+      - description: Candidate image source patch
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/http.ImageSourcePatchRequestDoc'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/http.ImageSourceValidationResultDoc'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/http.ErrorResponseDoc'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/http.ErrorResponseDoc'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/http.ErrorResponseDoc'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/http.ErrorResponseDoc'
+      summary: Validate runtime image source config
+      tags:
+      - Image Source Admin
+  /api/v1/captcha:
+    get:
+      description: Returns a new slider captcha challenge, including master image,
+        tile image, expiration, and whether mouse-track data is required.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/http.CaptchaChallengeResponseDoc'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/http.ErrorResponseDoc'
+      summary: Generate slider captcha
+      tags:
+      - Captcha
+  /api/v1/captcha/verify:
+    post:
+      consumes:
+      - application/json
+      description: Verifies the slider position and optional mouse-track payload.
+        On success, returns a short-lived captcha token.
+      parameters:
+      - description: Captcha verification payload. mouseTrack should be supplied when
+          requireMouseTrack=true.
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/http.VerifyCaptchaRequestDoc'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/http.VerifyCaptchaResponseDoc'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/http.ErrorResponseDoc'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/http.ErrorResponseDoc'
+      summary: Verify slider captcha
+      tags:
+      - Captcha
+  /health:
+    get:
+      description: Returns overall captcha service health and dependency status.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/http.HealthResponseDoc'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/http.HealthResponseDoc'
+      summary: Service health check
+      tags:
+      - Health
+schemes:
+- http
+swagger: "2.0"
+tags:
+- description: Endpoints for generating and verifying slider captchas.
+  name: Captcha
+- description: Admin-only endpoints for runtime image-source management.
+  name: Image Source Admin
+- description: Service health and probe endpoints.
+  name: Health
