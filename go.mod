@@ -13,6 +13,7 @@ require (
 	github.com/swaggo/swag v1.16.6
 	github.com/wenlng/go-captcha/v2 v2.0.4
 	go.uber.org/zap v1.27.1
+	golang.org/x/image v0.16.0
 	golang.org/x/time v0.1.0
 	google.golang.org/grpc v1.78.0
 )
@@ -99,7 +100,6 @@ require (
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
 	golang.org/x/arch v0.8.0 // indirect
 	golang.org/x/crypto v0.44.0 // indirect
-	golang.org/x/image v0.16.0 // indirect
 	golang.org/x/mod v0.29.0 // indirect
 	golang.org/x/net v0.47.0 // indirect
 	golang.org/x/sync v0.18.0 // indirect

@@ -17,8 +17,10 @@ const (
 
 	principalContextKey = "risk_admin_principal"
 
-	gatewayUserIDHeader    = "X-User-Id"
-	gatewayUserRolesHeader = "X-User-Roles"
+	standardUserIDHeader    = "user_id"
+	standardUserRolesHeader = "user_roles"
+	gatewayUserIDHeader     = "X-User-Id"
+	gatewayUserRolesHeader  = "X-User-Roles"
 )
 
 // RequestPrincipal is the authenticated identity injected by the gateway.
@@ -63,13 +65,13 @@ func parseRequestPrincipal(c *gin.Context) (*RequestPrincipal, error) {
 		return nil, errInvalidPrincipal
 	}
 
-	userID := strings.TrimSpace(c.GetHeader(gatewayUserIDHeader))
-	if userID == "" {
-		return nil, errInvalidPrincipal
+	userID, err := parseUserID(c.Request.Header)
+	if err != nil {
+		return nil, err
 	}
 
-	roles, err := parseRoleValues(c.Request.Header.Values(gatewayUserRolesHeader))
-	if err != nil || len(roles) == 0 {
+	roles, err := parseRoles(c.Request.Header)
+	if err != nil {
 		return nil, errInvalidPrincipal
 	}
 
@@ -77,6 +79,84 @@ func parseRequestPrincipal(c *gin.Context) (*RequestPrincipal, error) {
 		UserID: userID,
 		Roles:  roles,
 	}, nil
+}
+
+func parseUserID(headers http.Header) (string, error) {
+	if headers == nil {
+		return "", errInvalidPrincipal
+	}
+
+	var userID string
+	for _, headerName := range []string{standardUserIDHeader, gatewayUserIDHeader} {
+		value := strings.TrimSpace(headers.Get(headerName))
+		if value == "" {
+			continue
+		}
+		if userID == "" {
+			userID = value
+			continue
+		}
+		if value != userID {
+			return "", errInvalidPrincipal
+		}
+	}
+
+	if userID == "" {
+		return "", errInvalidPrincipal
+	}
+
+	return userID, nil
+}
+
+func parseRoles(headers http.Header) ([]int, error) {
+	if headers == nil {
+		return nil, errInvalidPrincipal
+	}
+
+	var roles []int
+	var hasRoles bool
+	for _, headerName := range []string{standardUserRolesHeader, gatewayUserRolesHeader} {
+		parsed, err := parseRoleValues(headers.Values(headerName))
+		if err != nil {
+			return nil, errInvalidPrincipal
+		}
+		if len(parsed) == 0 {
+			continue
+		}
+		if !hasRoles {
+			roles = parsed
+			hasRoles = true
+			continue
+		}
+		if !sameRoleSet(roles, parsed) {
+			return nil, errInvalidPrincipal
+		}
+	}
+
+	if !hasRoles {
+		return nil, errInvalidPrincipal
+	}
+
+	return roles, nil
+}
+
+func sameRoleSet(left, right []int) bool {
+	if len(left) != len(right) {
+		return false
+	}
+
+	seen := make(map[int]struct{}, len(left))
+	for _, role := range left {
+		seen[role] = struct{}{}
+	}
+
+	for _, role := range right {
+		if _, ok := seen[role]; !ok {
+			return false
+		}
+	}
+
+	return true
 }
 
 func (p *RequestPrincipal) HasAnyRole(roles ...int) bool {

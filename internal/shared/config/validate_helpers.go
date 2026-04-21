@@ -47,9 +47,6 @@ func validateNacosConfig(cfg NacosConfig, env string) error {
 	if strings.TrimSpace(cfg.ClusterName) == "" {
 		return fmt.Errorf("nacos cluster_name is required when nacos is enabled")
 	}
-	if env == "prod" && strings.TrimSpace(cfg.Namespace) == "" {
-		return fmt.Errorf("[security] nacos namespace is required in prod when nacos is enabled")
-	}
 	if cfg.RegisterIP != "" {
 		parsed := net.ParseIP(cfg.RegisterIP)
 		if parsed == nil || parsed.To4() == nil {

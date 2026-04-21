@@ -207,7 +207,7 @@ token:
 - `service_name` 必填
 - `group_name` 必填
 - `cluster_name` 必填
-- `prod` 环境下 `namespace` 必填
+- `namespace` 可以为空，空值表示使用 Nacos 默认命名空间
 - `register_ip` 如果设置，必须是合法 IPv4
 
 ### 7.3 风控服务校验
@@ -251,7 +251,7 @@ token:
 
 - `redis.password` 不能为空
 - `captcha` 服务的 `token.secret` 不能为空且不能是占位值
-- 如果启用 Nacos，则 `namespace` 不能为空
+- 如果启用 Nacos，`namespace` 可以留空以使用默认命名空间；只有显式填写时才会使用自定义命名空间
 
 ## 8. 敏感信息策略
 
