@@ -25,7 +25,7 @@ func swaggerVerifyCaptcha() {}
 
 // swaggerGetImageSource godoc
 // @Summary Get runtime image source status
-// @Description Returns the current runtime image source configuration and latest validation and refresh state for the captcha image pool.
+// @Description Returns the current runtime image source configuration and latest validation and refresh state for the captcha image pool. `version` is the runtime config version, while `activeGeneration` is the currently exposed image-pool generation.
 // @Tags Image Source Admin
 // @Produce json
 // @Param X-User-Id header string true "Authenticated user ID injected by the gateway"

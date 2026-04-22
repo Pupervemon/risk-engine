@@ -13,13 +13,13 @@ func (s *CaptchaService) GetImageSourceStatus(ctx context.Context) (ImageSourceS
 		return ImageSourceStatus{Enabled: false}, nil
 	}
 
-	poolImageCount, err := s.imagePool.Count(ctx)
+	poolSnapshot, err := s.imagePool.Snapshot(ctx)
 	if err != nil {
-		s.logger.Warn("failed to count image pool contents", zap.Error(err))
-		poolImageCount = 0
+		s.logger.Warn("failed to inspect image pool contents", zap.Error(err))
+		poolSnapshot = ImagePoolSnapshot{}
 	}
 
-	return manager.Status(s.imagePool.poolSize, poolImageCount), nil
+	return manager.Status(s.imagePool.poolSize, poolSnapshot), nil
 }
 
 // ValidateImageSource validates a candidate image source config without applying it.

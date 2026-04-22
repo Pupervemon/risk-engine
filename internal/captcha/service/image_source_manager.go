@@ -111,6 +111,8 @@ type ImageSourceStatus struct {
 	LastRefreshError    string                `json:"lastRefreshError,omitempty"`
 	PoolSize            int                   `json:"poolSize"`
 	PoolImageCount      int64                 `json:"poolImageCount"`
+	ActiveGeneration    string                `json:"activeGeneration,omitempty"`
+	GenerationCount     int64                 `json:"generationCount"`
 }
 
 // ImageSourceValidationResult 是配置校验接口的返回结果。
@@ -318,7 +320,7 @@ func (m *RuntimeImageSourceManager) ValidationResult(candidate ImageSourceRuntim
 //
 // 该快照给管理接口使用，能够看到当前配置、版本、最近一次校验/刷新情况，
 // 以及图片池规模等信息。
-func (m *RuntimeImageSourceManager) Status(poolSize int, poolImageCount int64) ImageSourceStatus {
+func (m *RuntimeImageSourceManager) Status(poolSize int, poolSnapshot ImagePoolSnapshot) ImageSourceStatus {
 	// 状态读取走读锁，允许多个请求并发查看。
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -333,7 +335,9 @@ func (m *RuntimeImageSourceManager) Status(poolSize int, poolImageCount int64) I
 		LastRefreshedAt:     formatOptionalTime(m.lastRefreshedAt),
 		LastRefreshError:    m.lastRefreshError,
 		PoolSize:            poolSize,
-		PoolImageCount:      poolImageCount,
+		PoolImageCount:      poolSnapshot.ImageCount,
+		ActiveGeneration:    poolSnapshot.ActiveGeneration,
+		GenerationCount:     poolSnapshot.GenerationCount,
 	}
 }
 

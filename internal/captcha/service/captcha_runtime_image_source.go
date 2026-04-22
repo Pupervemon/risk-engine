@@ -95,7 +95,7 @@ func (s *CaptchaService) EnableRuntimeImageSourceManager() error {
 	s.imagePool.provider = manager
 	// 记录启用状态，便于排查当前使用的图片源地址。
 	s.logger.Info("runtime image source manager enabled",
-		zap.String("url", manager.Status(s.imagePool.poolSize, 0).Config.URL))
+		zap.String("url", manager.Status(s.imagePool.poolSize, ImagePoolSnapshot{}).Config.URL))
 	return nil
 }
 

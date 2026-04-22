@@ -103,6 +103,8 @@ type ImageSourceStatusDoc struct {
 	LastRefreshError    string               `json:"lastRefreshError,omitempty"`
 	PoolSize            int                  `json:"poolSize"`
 	PoolImageCount      int64                `json:"poolImageCount"`
+	ActiveGeneration    string               `json:"activeGeneration,omitempty"`
+	GenerationCount     int64                `json:"generationCount"`
 }
 
 // ImageSourceValidationResultDoc documents the validate endpoint response.

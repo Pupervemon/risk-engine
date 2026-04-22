@@ -539,7 +539,21 @@ func (s *CaptchaService) StartImageRefresh(ctx context.Context) error {
 	}
 
 	refreshInterval := s.cfg.ImagePool.GetRefreshInterval()
-	s.imagePool.StartRefresh(ctx, refreshInterval)
+	currentCount, err := s.imagePool.Count(ctx)
+	refreshOnStartup := true
+	if err != nil {
+		s.logger.Warn("failed to inspect image pool before startup refresh; falling back to immediate refresh",
+			zap.Error(err))
+	} else if !shouldRefreshImagePoolOnStartup(currentCount) {
+		refreshOnStartup = false
+		s.logger.Info("image pool already contains cached images; skipping immediate startup refresh",
+			zap.Int64("current_count", currentCount))
+	} else {
+		s.logger.Info("image pool is empty; performing immediate startup refresh",
+			zap.Int64("current_count", currentCount))
+	}
+
+	s.imagePool.StartRefresh(ctx, refreshInterval, refreshOnStartup)
 
 	s.logger.Info("图片池刷新任务已启动",
 		zap.Duration("interval", refreshInterval))
@@ -572,4 +586,8 @@ func (s *CaptchaService) GetImagePoolStatus(ctx context.Context) map[string]inte
 	}
 
 	return status
+}
+
+func shouldRefreshImagePoolOnStartup(existingCount int64) bool {
+	return existingCount <= 0
 }

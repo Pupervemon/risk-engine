@@ -151,6 +151,10 @@ func (h *ImageSourceAdminHandler) writeImageSourceError(c *gin.Context, err erro
 		writeJSON(c, http.StatusConflict, errorResponse{Error: "IMAGE_POOL_DISABLED", Reason: err.Error()})
 		return
 	}
+	if errors.Is(err, captchaservice.ErrImagePoolRefreshInProgress) {
+		writeJSON(c, http.StatusConflict, errorResponse{Error: "IMAGE_POOL_REFRESH_IN_PROGRESS", Reason: err.Error()})
+		return
+	}
 
 	writeJSON(c, http.StatusBadRequest, errorResponse{Error: code, Reason: err.Error()})
 }
@@ -163,6 +167,14 @@ func (h *ImageSourceAdminHandler) writeImageSourceUpdateError(c *gin.Context, er
 	h.Logger.Warn("image source update failed", zap.Error(err))
 	if errors.Is(err, captchaservice.ErrImagePoolDisabled) {
 		writeJSON(c, http.StatusConflict, errorResponse{Error: "IMAGE_POOL_DISABLED", Reason: err.Error()})
+		return
+	}
+	if errors.Is(err, captchaservice.ErrImagePoolRefreshInProgress) {
+		writeJSON(c, http.StatusConflict, gin.H{
+			"error":  "IMAGE_POOL_REFRESH_IN_PROGRESS",
+			"reason": err.Error(),
+			"status": status,
+		})
 		return
 	}
 

@@ -3,13 +3,32 @@ package service
 import (
 	"context"
 	"crypto/rand"
+	"encoding/hex"
+	"errors"
 	"fmt"
-	"math/big"
 	"sync"
 	"time"
 
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
+)
+
+const (
+	imagePoolRefreshLockTTL            = 15 * time.Minute
+	imagePoolRefreshLockAcquireTimeout = 30 * time.Second
+	imagePoolRefreshLockRetryInterval  = 500 * time.Millisecond
+	imagePoolGenerationsToKeep         = 3
+)
+
+var (
+	ErrImagePoolRefreshInProgress = errors.New("captcha image pool refresh is already in progress")
+
+	releaseImagePoolRefreshLockScript = redis.NewScript(`
+if redis.call("GET", KEYS[1]) == ARGV[1] then
+    return redis.call("DEL", KEYS[1])
+end
+return 0
+`)
 )
 
 // ImageMeta contains normalized image data stored in the captcha image pool.
@@ -31,12 +50,25 @@ type RedisImagePool struct {
 	provider      ImageProvider
 	poolSize      int
 	refreshTicker *time.Ticker
+	midnightTimer *time.Timer
 	stopChan      chan struct{}
+	stopOnce      sync.Once
 	refreshMu     sync.Mutex
+}
+
+// ImagePoolSnapshot describes the current active image-pool generation state.
+type ImagePoolSnapshot struct {
+	ImageCount       int64
+	ActiveGeneration string
+	GenerationCount  int64
 }
 
 // NewRedisImagePool creates a Redis-backed image pool.
 func NewRedisImagePool(rdb *redis.Client, logger *zap.Logger, provider ImageProvider, poolSize int) *RedisImagePool {
+	if logger == nil {
+		logger = zap.NewNop()
+	}
+
 	return &RedisImagePool{
 		rdb:      rdb,
 		logger:   logger,
@@ -52,54 +84,33 @@ func (p *RedisImagePool) LoadImages(ctx context.Context, images []ImageMeta) err
 		return fmt.Errorf("no images to load")
 	}
 
-	p.logger.Info("loading images into redis", zap.Int("count", len(images)))
-	startTime := time.Now()
-
-	pipe := p.rdb.Pipeline()
-
-	oldIDs, err := p.rdb.SMembers(ctx, p.indexKey()).Result()
-	if err == nil && len(oldIDs) > 0 {
-		for _, oldID := range oldIDs {
-			pipe.Del(ctx, p.imageKey(oldID))
-		}
-		pipe.Del(ctx, p.indexKey())
+	generation, err := newImagePoolGeneration()
+	if err != nil {
+		return fmt.Errorf("generate image pool generation: %w", err)
 	}
 
-	for _, img := range images {
-		pipe.Set(ctx, p.imageKey(img.ID), img.Data, 0)
-		pipe.SAdd(ctx, p.indexKey(), img.ID)
-	}
-
-	if _, err := pipe.Exec(ctx); err != nil {
-		p.logger.Error("failed to load images into redis", zap.Error(err))
-		return err
-	}
-
-	p.logger.Info("images loaded into redis",
-		zap.Int("count", len(images)),
-		zap.Duration("duration", time.Since(startTime)))
-
-	return nil
+	return p.loadImagesIntoGeneration(ctx, generation, images)
 }
 
-// GetRandom returns a random image from the pool.
+// GetRandom returns a random image from the active pool generation.
 func (p *RedisImagePool) GetRandom(ctx context.Context) ([]byte, error) {
-	ids, err := p.rdb.SMembers(ctx, p.indexKey()).Result()
+	generation, err := p.activeGeneration(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get image IDs: %w", err)
+		return nil, fmt.Errorf("failed to get active image generation: %w", err)
 	}
-
-	if len(ids) == 0 {
+	if generation == "" {
 		return nil, fmt.Errorf("image pool is empty")
 	}
 
-	randomIdx, err := rand.Int(rand.Reader, big.NewInt(int64(len(ids))))
+	imageID, err := p.rdb.SRandMember(ctx, p.generationIndexKey(generation)).Result()
+	if err == redis.Nil || imageID == "" {
+		return nil, fmt.Errorf("image pool is empty")
+	}
 	if err != nil {
-		return nil, fmt.Errorf("failed to generate random index: %w", err)
+		return nil, fmt.Errorf("failed to get image ID: %w", err)
 	}
 
-	selectedID := ids[randomIdx.Int64()]
-	data, err := p.rdb.Get(ctx, p.imageKey(selectedID)).Bytes()
+	data, err := p.rdb.Get(ctx, p.generationImageKey(generation, imageID)).Bytes()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get image data: %w", err)
 	}
@@ -107,29 +118,99 @@ func (p *RedisImagePool) GetRandom(ctx context.Context) ([]byte, error) {
 	return data, nil
 }
 
-// Count returns the current number of images in the pool.
+// Count returns the current number of images in the active pool generation.
 func (p *RedisImagePool) Count(ctx context.Context) (int64, error) {
-	return p.rdb.SCard(ctx, p.indexKey()).Result()
-}
-
-// StartRefresh starts the periodic image refresh job.
-func (p *RedisImagePool) StartRefresh(ctx context.Context, interval time.Duration) {
-	p.logger.Info("starting image pool refresh job",
-		zap.Duration("interval", interval),
-		zap.Int("pool_size", p.poolSize))
-
-	if err := p.RefreshNow(ctx); err != nil {
-		p.logger.Error("initial image refresh failed", zap.Error(err))
+	generation, err := p.activeGeneration(ctx)
+	if err != nil {
+		return 0, err
+	}
+	if generation == "" {
+		return 0, nil
 	}
 
-	p.refreshTicker = time.NewTicker(interval)
+	return p.rdb.SCard(ctx, p.generationIndexKey(generation)).Result()
+}
+
+// Snapshot returns the currently exposed image-pool generation information.
+func (p *RedisImagePool) Snapshot(ctx context.Context) (ImagePoolSnapshot, error) {
+	generation, err := p.activeGeneration(ctx)
+	if err != nil {
+		return ImagePoolSnapshot{}, fmt.Errorf("get active image generation: %w", err)
+	}
+
+	snapshot := ImagePoolSnapshot{
+		ActiveGeneration: generation,
+	}
+
+	pipe := p.rdb.Pipeline()
+	generationCountCmd := pipe.ZCard(ctx, p.generationsKey())
+
+	var imageCountCmd *redis.IntCmd
+	if generation != "" {
+		imageCountCmd = pipe.SCard(ctx, p.generationIndexKey(generation))
+	}
+
+	if _, err := pipe.Exec(ctx); err != nil {
+		return ImagePoolSnapshot{}, fmt.Errorf("inspect image pool snapshot: %w", err)
+	}
+
+	snapshot.GenerationCount = generationCountCmd.Val()
+	if imageCountCmd != nil {
+		snapshot.ImageCount = imageCountCmd.Val()
+	}
+
+	return snapshot, nil
+}
+
+// StartRefresh starts the image-pool refresh job.
+// It may perform an immediate warm-up refresh and then keeps the pool fresh via
+// the configured interval plus a local-midnight daily refresh.
+func (p *RedisImagePool) StartRefresh(ctx context.Context, interval time.Duration, refreshOnStartup bool) {
+	nextMidnightAt := nextMidnightRefreshTime(time.Now())
+	p.logger.Info("starting image pool refresh job",
+		zap.Duration("interval", interval),
+		zap.Int("pool_size", p.poolSize),
+		zap.Bool("refresh_on_startup", refreshOnStartup),
+		zap.Time("next_midnight_refresh_at", nextMidnightAt))
+
+	if refreshOnStartup {
+		if err := p.RefreshNow(ctx); err != nil {
+			p.logger.Error("initial image refresh failed", zap.Error(err))
+		}
+	} else {
+		p.logger.Info("skipping initial image refresh because the pool already has cached images")
+	}
+
+	if interval > 0 {
+		p.refreshTicker = time.NewTicker(interval)
+	}
+	p.midnightTimer = time.NewTimer(nextMidnightRefreshDelay(time.Now()))
 	go func() {
 		for {
+			var intervalChan <-chan time.Time
+			if p.refreshTicker != nil {
+				intervalChan = p.refreshTicker.C
+			}
+
+			var midnightChan <-chan time.Time
+			if p.midnightTimer != nil {
+				midnightChan = p.midnightTimer.C
+			}
+
 			select {
-			case <-p.refreshTicker.C:
+			case <-intervalChan:
 				if err := p.RefreshNow(ctx); err != nil {
 					p.logger.Error("scheduled image refresh failed", zap.Error(err))
 				}
+			case <-midnightChan:
+				if err := p.RefreshNow(ctx); err != nil {
+					p.logger.Error("midnight image refresh failed", zap.Error(err))
+				}
+
+				nextMidnightAt := nextMidnightRefreshTime(time.Now())
+				p.logger.Info("scheduled next midnight image refresh",
+					zap.Time("next_midnight_refresh_at", nextMidnightAt))
+				p.midnightTimer.Reset(nextMidnightRefreshDelay(time.Now()))
 			case <-p.stopChan:
 				p.logger.Info("image pool refresh job stopped")
 				return
@@ -143,7 +224,12 @@ func (p *RedisImagePool) StopRefresh() {
 	if p.refreshTicker != nil {
 		p.refreshTicker.Stop()
 	}
-	close(p.stopChan)
+	if p.midnightTimer != nil {
+		p.midnightTimer.Stop()
+	}
+	p.stopOnce.Do(func() {
+		close(p.stopChan)
+	})
 }
 
 // RefreshNow refreshes the pool using the active provider.
@@ -164,6 +250,12 @@ func (p *RedisImagePool) RefreshWithProvider(ctx context.Context, provider Image
 }
 
 func (p *RedisImagePool) refreshWithProvider(ctx context.Context, provider ImageProvider) error {
+	lockToken, err := p.acquireRefreshLock(ctx)
+	if err != nil {
+		return err
+	}
+	defer p.releaseRefreshLock(lockToken)
+
 	p.logger.Info("refreshing image pool", zap.Int("target_size", p.poolSize))
 	startTime := time.Now()
 
@@ -188,10 +280,217 @@ func (p *RedisImagePool) refreshWithProvider(ctx context.Context, provider Image
 	return nil
 }
 
-func (p *RedisImagePool) imageKey(imageID string) string {
-	return fmt.Sprintf("captcha:images:%s", imageID)
+func (p *RedisImagePool) loadImagesIntoGeneration(ctx context.Context, generation string, images []ImageMeta) error {
+	if generation == "" {
+		return fmt.Errorf("image pool generation is required")
+	}
+
+	p.logger.Info("loading images into redis",
+		zap.Int("count", len(images)),
+		zap.String("generation", generation))
+	startTime := time.Now()
+
+	previousGeneration, err := p.activeGeneration(ctx)
+	if err != nil {
+		return fmt.Errorf("get active generation before refresh: %w", err)
+	}
+
+	pipe := p.rdb.Pipeline()
+	for _, img := range images {
+		pipe.Set(ctx, p.generationImageKey(generation, img.ID), img.Data, 0)
+		pipe.SAdd(ctx, p.generationIndexKey(generation), img.ID)
+	}
+
+	if _, err := pipe.Exec(ctx); err != nil {
+		p.logger.Error("failed to load images into redis",
+			zap.Error(err),
+			zap.String("generation", generation))
+		return err
+	}
+
+	if err := p.activateGeneration(ctx, generation); err != nil {
+		_ = p.deleteGeneration(ctx, generation)
+		return fmt.Errorf("activate image generation %s: %w", generation, err)
+	}
+
+	if err := p.cleanupStaleGenerations(ctx); err != nil {
+		p.logger.Warn("failed to cleanup stale image generations", zap.Error(err))
+	}
+
+	p.logger.Info("images loaded into redis",
+		zap.Int("count", len(images)),
+		zap.String("generation", generation),
+		zap.String("previous_generation", previousGeneration),
+		zap.Duration("duration", time.Since(startTime)))
+
+	return nil
 }
 
-func (p *RedisImagePool) indexKey() string {
-	return "captcha:images:index"
+func (p *RedisImagePool) activateGeneration(ctx context.Context, generation string) error {
+	pipe := p.rdb.TxPipeline()
+	pipe.Set(ctx, p.activeGenerationKey(), generation, 0)
+	pipe.ZAdd(ctx, p.generationsKey(), redis.Z{
+		Score:  float64(time.Now().UnixNano()),
+		Member: generation,
+	})
+
+	_, err := pipe.Exec(ctx)
+	return err
+}
+
+func (p *RedisImagePool) cleanupStaleGenerations(ctx context.Context) error {
+	generations, err := p.rdb.ZRange(ctx, p.generationsKey(), 0, -1).Result()
+	if err != nil {
+		return fmt.Errorf("list image generations: %w", err)
+	}
+	if len(generations) <= imagePoolGenerationsToKeep {
+		return nil
+	}
+
+	staleGenerations := generations[:len(generations)-imagePoolGenerationsToKeep]
+	for _, generation := range staleGenerations {
+		if generation == "" {
+			continue
+		}
+		if err := p.deleteGeneration(ctx, generation); err != nil {
+			return err
+		}
+		if err := p.rdb.ZRem(ctx, p.generationsKey(), generation).Err(); err != nil {
+			return fmt.Errorf("remove stale image generation %s: %w", generation, err)
+		}
+	}
+
+	return nil
+}
+
+func (p *RedisImagePool) deleteGeneration(ctx context.Context, generation string) error {
+	ids, err := p.rdb.SMembers(ctx, p.generationIndexKey(generation)).Result()
+	if err != nil && err != redis.Nil {
+		return fmt.Errorf("list image IDs for generation %s: %w", generation, err)
+	}
+
+	pipe := p.rdb.Pipeline()
+	for _, imageID := range ids {
+		pipe.Del(ctx, p.generationImageKey(generation, imageID))
+	}
+	pipe.Del(ctx, p.generationIndexKey(generation))
+
+	if _, err := pipe.Exec(ctx); err != nil {
+		return fmt.Errorf("delete image generation %s: %w", generation, err)
+	}
+
+	return nil
+}
+
+func (p *RedisImagePool) activeGeneration(ctx context.Context) (string, error) {
+	generation, err := p.rdb.Get(ctx, p.activeGenerationKey()).Result()
+	if err == redis.Nil {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+
+	return generation, nil
+}
+
+func (p *RedisImagePool) acquireRefreshLock(ctx context.Context) (string, error) {
+	lockCtx := ctx
+	cancel := func() {}
+	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
+		lockCtx, cancel = context.WithTimeout(ctx, imagePoolRefreshLockAcquireTimeout)
+	}
+	defer cancel()
+
+	token, err := newImagePoolToken()
+	if err != nil {
+		return "", fmt.Errorf("generate refresh lock token: %w", err)
+	}
+
+	retryTicker := time.NewTicker(imagePoolRefreshLockRetryInterval)
+	defer retryTicker.Stop()
+
+	for {
+		ok, err := p.rdb.SetNX(lockCtx, p.refreshLockKey(), token, imagePoolRefreshLockTTL).Result()
+		if err != nil {
+			if lockCtx.Err() != nil {
+				return "", ErrImagePoolRefreshInProgress
+			}
+			return "", fmt.Errorf("acquire image pool refresh lock: %w", err)
+		}
+		if ok {
+			return token, nil
+		}
+
+		select {
+		case <-lockCtx.Done():
+			return "", ErrImagePoolRefreshInProgress
+		case <-retryTicker.C:
+		}
+	}
+}
+
+func (p *RedisImagePool) releaseRefreshLock(token string) {
+	if token == "" {
+		return
+	}
+
+	releaseCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	if err := releaseImagePoolRefreshLockScript.Run(releaseCtx, p.rdb, []string{p.refreshLockKey()}, token).Err(); err != nil {
+		p.logger.Warn("failed to release image pool refresh lock", zap.Error(err))
+	}
+}
+
+func (p *RedisImagePool) activeGenerationKey() string {
+	return "captcha:images:active_generation"
+}
+
+func (p *RedisImagePool) generationsKey() string {
+	return "captcha:images:generations"
+}
+
+func (p *RedisImagePool) generationImageKey(generation, imageID string) string {
+	return fmt.Sprintf("captcha:images:g:%s:data:%s", generation, imageID)
+}
+
+func (p *RedisImagePool) generationIndexKey(generation string) string {
+	return fmt.Sprintf("captcha:images:g:%s:index", generation)
+}
+
+func (p *RedisImagePool) refreshLockKey() string {
+	return "captcha:images:refresh:lock"
+}
+
+func nextMidnightRefreshTime(now time.Time) time.Time {
+	return time.Date(
+		now.Year(),
+		now.Month(),
+		now.Day()+1,
+		0, 0, 0, 0,
+		now.Location(),
+	)
+}
+
+func nextMidnightRefreshDelay(now time.Time) time.Duration {
+	return nextMidnightRefreshTime(now).Sub(now)
+}
+
+func newImagePoolGeneration() (string, error) {
+	suffix, err := newImagePoolToken()
+	if err != nil {
+		return "", err
+	}
+
+	return fmt.Sprintf("%d-%s", time.Now().UnixNano(), suffix), nil
+}
+
+func newImagePoolToken() (string, error) {
+	buf := make([]byte, 16)
+	if _, err := rand.Read(buf); err != nil {
+		return "", err
+	}
+
+	return hex.EncodeToString(buf), nil
 }
