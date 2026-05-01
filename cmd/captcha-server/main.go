@@ -14,6 +14,7 @@ import (
 	captchaservice "github.com/Pupervemon/risk-engine/internal/captcha/service"
 	httptransport "github.com/Pupervemon/risk-engine/internal/captcha/transport/http"
 	"github.com/Pupervemon/risk-engine/internal/shared/config"
+	"github.com/Pupervemon/risk-engine/internal/shared/logging"
 	"github.com/Pupervemon/risk-engine/internal/shared/registry"
 	captchapb "github.com/Pupervemon/risk-proto/gen/go/captcha/v1"
 	"github.com/redis/go-redis/v9"
@@ -53,8 +54,11 @@ func main() {
 		panic(fmt.Sprintf("failed to load config: %v", err))
 	}
 
-	// 使用生产级日志器，确保服务启动、异常和关闭过程都能留下结构化日志。
-	logger, _ := zap.NewProduction()
+	// 使用彩色 console 日志，方便本地和终端里快速区分日志级别。
+	logger, err := logging.NewColorLogger()
+	if err != nil {
+		panic(fmt.Sprintf("failed to initialize logger: %v", err))
+	}
 	defer logger.Sync()
 
 	// 打印关键启动参数，便于排查端口、注册中心开关等部署问题。

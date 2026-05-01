@@ -14,6 +14,7 @@ import (
 	riskservice "github.com/Pupervemon/risk-engine/internal/risk/service"
 	risktransport "github.com/Pupervemon/risk-engine/internal/risk/transport"
 	"github.com/Pupervemon/risk-engine/internal/shared/config"
+	"github.com/Pupervemon/risk-engine/internal/shared/logging"
 	"github.com/Pupervemon/risk-engine/internal/shared/registry"
 	pb "github.com/Pupervemon/risk-proto/gen/go/risk/v1"
 	"github.com/redis/go-redis/v9"
@@ -50,7 +51,10 @@ func main() {
 		panic(fmt.Sprintf("failed to load config: %v", err))
 	}
 
-	logger, _ := zap.NewProduction()
+	logger, err := logging.NewColorLogger()
+	if err != nil {
+		panic(fmt.Sprintf("failed to initialize logger: %v", err))
+	}
 	defer logger.Sync()
 
 	logger.Info("starting risk service",
