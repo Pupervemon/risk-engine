@@ -3,16 +3,17 @@ package service
 import (
 	"context"
 
+	appports "github.com/Pupervemon/risk-engine/internal/captcha/application/ports"
 	captchapb "github.com/Pupervemon/risk-proto/gen/go/captcha/v1"
 )
 
 type CaptchaTokenService struct {
 	captchapb.UnimplementedCaptchaTokenServiceServer
-	TokenService *TokenService
+	Token appports.TokenUseCase
 }
 
-func NewCaptchaTokenService(tokenService *TokenService) *CaptchaTokenService {
-	return &CaptchaTokenService{TokenService: tokenService}
+func NewCaptchaTokenService(token appports.TokenUseCase) *CaptchaTokenService {
+	return &CaptchaTokenService{Token: token}
 }
 
 func (s *CaptchaTokenService) VerifyToken(ctx context.Context, req *captchapb.VerifyTokenRequest) (*captchapb.VerifyTokenResponse, error) {
@@ -20,6 +21,9 @@ func (s *CaptchaTokenService) VerifyToken(ctx context.Context, req *captchapb.Ve
 		return &captchapb.VerifyTokenResponse{Valid: false, Reason: "TOKEN_EMPTY", ExpiresAt: 0}, nil
 	}
 
-	valid, reason, exp := s.TokenService.VerifyToken(ctx, req.Token)
-	return &captchapb.VerifyTokenResponse{Valid: valid, Reason: reason, ExpiresAt: exp}, nil
+	result, err := s.Token.Verify(ctx, req.Token)
+	if err != nil {
+		return &captchapb.VerifyTokenResponse{Valid: false, Reason: "TOKEN_VERIFY_FAILED", ExpiresAt: 0}, nil
+	}
+	return &captchapb.VerifyTokenResponse{Valid: result.Valid, Reason: result.Reason, ExpiresAt: result.ExpiresAt}, nil
 }

@@ -95,8 +95,11 @@ func main() {
 	}
 	// Token 服务单独封装，负责验证码 token 的生成、存储和验证。
 	tokenService := captchaservice.NewTokenService(rdb, &cfg.Token)
-	// gRPC 暴露的服务实现基于 TokenService，提供给外部系统直接调用。
-	grpcService := captchaservice.NewCaptchaTokenService(tokenService)
+	captchaUseCase := captchaservice.NewCaptchaUseCaseAdapter(captchaService)
+	tokenUseCase := captchaservice.NewTokenUseCaseAdapter(tokenService)
+	imageSourceUseCase := captchaservice.NewImageSourceUseCaseAdapter(captchaService)
+	// gRPC 暴露的服务实现基于 token use case，提供给外部系统直接调用。
+	grpcService := captchaservice.NewCaptchaTokenService(tokenUseCase)
 
 	// 如果配置启用了图片池，则启动后台刷新任务，定期预热可用图片资源。
 	if cfg.Captcha.ImagePool.Enabled {
@@ -108,14 +111,14 @@ func main() {
 
 	// HTTP 控制器层：负责对外提供验证码接口、运行时图片源管理接口以及健康检查接口。
 	httpHandler := &httptransport.CaptchaHandler{
-		CaptchaService: captchaService,
-		TokenService:   tokenService,
-		Logger:         logger,
+		Captcha: captchaUseCase,
+		Token:   tokenUseCase,
+		Logger:  logger,
 	}
 	// 图片源管理接口通常只给管理员调用，因此单独放在一个 handler 中。
 	imageSourceHandler := &httptransport.ImageSourceAdminHandler{
-		CaptchaService: captchaService,
-		Logger:         logger,
+		ImageSource: imageSourceUseCase,
+		Logger:      logger,
 	}
 
 	// 健康检查依赖 Redis，用于给 k8s/负载均衡/运维系统提供探针结果。

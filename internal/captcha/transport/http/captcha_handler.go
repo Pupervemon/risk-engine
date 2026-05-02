@@ -4,15 +4,16 @@ import (
 	"net/http"
 	"time"
 
-	captchaservice "github.com/Pupervemon/risk-engine/internal/captcha/service"
+	appports "github.com/Pupervemon/risk-engine/internal/captcha/application/ports"
+	"github.com/Pupervemon/risk-engine/internal/captcha/domain"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 )
 
 type CaptchaHandler struct {
-	CaptchaService *captchaservice.CaptchaService
-	TokenService   *captchaservice.TokenService
-	Logger         *zap.Logger
+	Captcha appports.CaptchaUseCase
+	Token   appports.TokenUseCase
+	Logger  *zap.Logger
 }
 
 type captchaResponse struct {
@@ -25,10 +26,16 @@ type captchaResponse struct {
 }
 
 type verifyRequest struct {
-	CaptchaID  string                       `json:"captchaId"`
-	PointX     int                          `json:"pointX"`
-	PointY     int                          `json:"pointY"`
-	MouseTrack *[]captchaservice.TrackPoint `json:"mouseTrack,omitempty"` // Optional mouse-track data.
+	CaptchaID  string               `json:"captchaId"`
+	PointX     int                  `json:"pointX"`
+	PointY     int                  `json:"pointY"`
+	MouseTrack *[]trackPointRequest `json:"mouseTrack,omitempty"` // Optional mouse-track data.
+}
+
+type trackPointRequest struct {
+	X    int   `json:"x"`
+	Y    int   `json:"y"`
+	Time int64 `json:"t"`
 }
 
 type verifyResponse struct {
@@ -42,7 +49,7 @@ type errorResponse struct {
 }
 
 func (h *CaptchaHandler) GetCaptcha(c *gin.Context) {
-	challenge, err := h.CaptchaService.Generate(c.Request.Context())
+	challenge, err := h.Captcha.Generate(c.Request.Context())
 	if err != nil {
 		h.Logger.Error("failed to generate captcha", zap.Error(err))
 		writeJSON(c, http.StatusInternalServerError, errorResponse{Error: "CAPTCHA_GENERATE_FAILED", Reason: "INTERNAL_ERROR"})
@@ -78,39 +85,62 @@ func (h *CaptchaHandler) VerifyCaptcha(c *gin.Context) {
 		zap.Int("pointY", req.PointY),
 		zap.String("track", trackInfo))
 
-	valid, reason, err := h.CaptchaService.VerifyWithTrack(c.Request.Context(), req.CaptchaID, req.PointX, req.PointY, req.MouseTrack)
+	result, err := h.Captcha.Verify(c.Request.Context(), appports.VerifyCaptchaCommand{
+		CaptchaID:          req.CaptchaID,
+		PointX:             req.PointX,
+		PointY:             req.PointY,
+		MouseTrack:         trackPointsToDomain(req.MouseTrack),
+		MouseTrackProvided: req.MouseTrack != nil,
+	})
 	if err != nil {
 		h.Logger.Error("captcha verification failed", zap.Error(err), zap.String("captchaId", req.CaptchaID))
 		writeJSON(c, http.StatusInternalServerError, errorResponse{Error: "CAPTCHA_VERIFY_FAILED", Reason: "INTERNAL_ERROR"})
 		return
 	}
-	if !valid {
+	if !result.Valid {
 		h.Logger.Warn("captcha rejected",
 			zap.String("captchaId", req.CaptchaID),
 			zap.Int("pointX", req.PointX),
-			zap.String("reason", reason))
-		writeJSON(c, http.StatusBadRequest, errorResponse{Error: "CAPTCHA_INVALID", Reason: reason})
+			zap.String("reason", result.Reason))
+		writeJSON(c, http.StatusBadRequest, errorResponse{Error: "CAPTCHA_INVALID", Reason: result.Reason})
 		return
 	}
 
 	h.Logger.Info("captcha verified", zap.String("captchaId", req.CaptchaID))
 
-	token, exp, err := h.TokenService.IssueToken(c.Request.Context(), req.CaptchaID)
+	issuedToken, err := h.Token.Issue(c.Request.Context(), req.CaptchaID)
 	if err != nil {
 		h.Logger.Error("failed to issue token", zap.Error(err))
 		writeJSON(c, http.StatusInternalServerError, errorResponse{Error: "TOKEN_ISSUE_FAILED", Reason: "INTERNAL_ERROR"})
 		return
 	}
 
-	expiresIn := exp - time.Now().Unix()
+	expiresIn := issuedToken.ExpiresAt - time.Now().Unix()
 	if expiresIn < 0 {
 		expiresIn = 0
 	}
 
 	writeJSON(c, http.StatusOK, verifyResponse{
-		Token:     token,
+		Token:     issuedToken.Token,
 		ExpiresIn: expiresIn,
 	})
+}
+
+func trackPointsToDomain(points *[]trackPointRequest) []domain.TrackPoint {
+	if points == nil {
+		return nil
+	}
+
+	converted := make([]domain.TrackPoint, 0, len(*points))
+	for _, point := range *points {
+		converted = append(converted, domain.TrackPoint{
+			X:    point.X,
+			Y:    point.Y,
+			Time: point.Time,
+		})
+	}
+
+	return converted
 }
 
 func writeJSON(c *gin.Context, status int, payload interface{}) {
