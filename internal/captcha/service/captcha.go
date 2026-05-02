@@ -47,9 +47,6 @@ func NewCaptchaService(rdb *redis.Client, cfg *config.CaptchaConfigSpec, logger 
 		logger = zap.NewNop()
 	}
 
-	width := normalizedWidth(cfg.Width)
-	height := normalizedHeight(cfg.Height)
-
 	service := &CaptchaService{
 		rdb:          rdb,
 		cfg:          cfg,
@@ -57,28 +54,7 @@ func NewCaptchaService(rdb *redis.Client, cfg *config.CaptchaConfigSpec, logger 
 		useImagePool: cfg.ImagePool.Enabled,
 	}
 
-	if cfg.ImagePool.Enabled {
-		poolSize := cfg.ImagePool.PoolSize
-		if poolSize <= 0 {
-			poolSize = 50
-		}
-
-		apiConfig := ExternalImageAPIConfig{
-			URL:                cfg.ExternalImageAPI.URL,
-			APIKey:             cfg.ExternalImageAPI.APIKey,
-			Timeout:            cfg.ExternalImageAPI.GetTimeout(),
-			RateLimitPerMinute: cfg.ExternalImageAPI.RateLimitPerMinute,
-			RetryCount:         cfg.ExternalImageAPI.RetryCount,
-		}
-
-		providerFactory := NewExternalImageProviderFactory(logger, width, height)
-		provider := providerFactory.BuildImagePoolProvider(apiConfig)
-		service.imagePool = NewRedisImagePool(rdb, logger, provider, poolSize)
-
-		logger.Info("图片池已初始化",
-			zap.Int("pool_size", poolSize),
-			zap.Bool("enabled", true))
-	}
+	service.imagePool = newConfiguredImagePool(rdb, cfg, logger)
 
 	if cfg.TrackValidation.Enabled {
 		logger.Info("轨迹校验已启用",

@@ -1,4 +1,4 @@
-package service
+package imagepool
 
 import (
 	"context"
@@ -50,9 +50,47 @@ func TestRedisImagePoolLoadImagesUsesRepository(t *testing.T) {
 	}
 }
 
+func TestRedisImagePoolRefreshWithProviderUsesLockAndProvider(t *testing.T) {
+	t.Parallel()
+
+	repository := &fakeImagePoolRepository{}
+	pool := newRedisImagePool(repository, nil, nil, 2)
+	provider := &fakeImageProvider{
+		images: []domain.ImageMeta{
+			{ID: "img-1", Data: []byte("image-1"), URL: "https://example.test/img-1.jpg"},
+			{ID: "img-2", Data: []byte("image-2"), URL: "https://example.test/img-2.jpg"},
+		},
+	}
+
+	if err := pool.RefreshWithProvider(context.Background(), provider); err != nil {
+		t.Fatalf("RefreshWithProvider() error = %v", err)
+	}
+
+	if provider.calls != 1 {
+		t.Fatalf("provider calls = %d, want 1", provider.calls)
+	}
+	if provider.requestedCount != 2 {
+		t.Fatalf("provider requested count = %d, want 2", provider.requestedCount)
+	}
+	if repository.acquireLockCalls != 1 {
+		t.Fatalf("acquire lock calls = %d, want 1", repository.acquireLockCalls)
+	}
+	if repository.releaseLockCalls != 1 {
+		t.Fatalf("release lock calls = %d, want 1", repository.releaseLockCalls)
+	}
+	if repository.loadCalls != 1 {
+		t.Fatalf("load calls = %d, want 1", repository.loadCalls)
+	}
+	if len(repository.loadedImages) != 2 {
+		t.Fatalf("loaded images = %d, want 2", len(repository.loadedImages))
+	}
+}
+
 type fakeImagePoolRepository struct {
 	loadCalls        int
 	cleanupCalls     int
+	acquireLockCalls int
+	releaseLockCalls int
 	loadedGeneration string
 	loadedImages     []domain.ImageMeta
 }
@@ -82,9 +120,23 @@ func (r *fakeImagePoolRepository) CleanupStaleGenerations(context.Context, int) 
 }
 
 func (r *fakeImagePoolRepository) AcquireRefreshLock(context.Context, string, time.Duration) (bool, error) {
+	r.acquireLockCalls++
 	return true, nil
 }
 
 func (r *fakeImagePoolRepository) ReleaseRefreshLock(context.Context, string) error {
+	r.releaseLockCalls++
 	return nil
+}
+
+type fakeImageProvider struct {
+	images         []domain.ImageMeta
+	calls          int
+	requestedCount int
+}
+
+func (p *fakeImageProvider) FetchImages(_ context.Context, count int) ([]domain.ImageMeta, error) {
+	p.calls++
+	p.requestedCount = count
+	return p.images, nil
 }

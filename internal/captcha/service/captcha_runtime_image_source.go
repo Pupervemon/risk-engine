@@ -83,17 +83,17 @@ func (s *CaptchaService) EnableRuntimeImageSourceManager() error {
 	s.restoreRuntimeImageSource(binding)
 
 	// 首次绑定成功后，把 imagePool 的 provider 切换到 runtime manager。
-	s.imagePool.provider = manager
+	s.imagePool.SetProvider(manager)
 	s.imageSourceBinding = binding
 	s.imageSourceUseCase = captchaapp.NewImageSourceUseCase(
 		NewRuntimeImageSourceManagerPortAdapter(manager),
 		NewImagePoolPortAdapter(s.imagePool),
 		binding.store,
-		captchaapp.ImageSourceOptions{PoolSize: s.imagePool.poolSize},
+		captchaapp.ImageSourceOptions{PoolSize: s.imagePool.PoolSize()},
 	)
 	// 记录启用状态，便于排查当前使用的图片源地址。
 	s.logger.Info("runtime image source manager enabled",
-		zap.String("url", manager.Status(s.imagePool.poolSize, domain.ImagePoolSnapshot{}).Config.URL))
+		zap.String("url", manager.Status(s.imagePool.PoolSize(), domain.ImagePoolSnapshot{}).Config.URL))
 	return nil
 }
 
