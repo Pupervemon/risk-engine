@@ -35,6 +35,15 @@ type ImageProvider interface {
 	FetchImages(ctx context.Context, count int) ([]domain.ImageMeta, error)
 }
 
+type RuntimeImageSourceManager interface {
+	BuildCandidateConfig(patch domain.ImageSourcePatch) (domain.ImageSourceRuntimeConfig, error)
+	ValidateConfig(ctx context.Context, candidate domain.ImageSourceRuntimeConfig) (ImageProvider, error)
+	ApplyConfig(candidate domain.ImageSourceRuntimeConfig, provider ImageProvider)
+	RecordRefreshResult(err error)
+	ValidationResult(candidate domain.ImageSourceRuntimeConfig) domain.ImageSourceValidationResult
+	Status(poolSize int, poolSnapshot domain.ImagePoolSnapshot) domain.ImageSourceStatus
+}
+
 type RuntimeImageSourceStore interface {
 	Load(ctx context.Context) (domain.ImageSourceRuntimeConfig, bool, error)
 	Save(ctx context.Context, cfg domain.ImageSourceRuntimeConfig) error

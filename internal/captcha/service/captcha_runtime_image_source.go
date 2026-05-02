@@ -6,6 +6,8 @@ import (
 	"time"
 
 	redisadapter "github.com/Pupervemon/risk-engine/internal/captcha/adapter/outbound/redis"
+	captchaapp "github.com/Pupervemon/risk-engine/internal/captcha/application"
+	appports "github.com/Pupervemon/risk-engine/internal/captcha/application/ports"
 	"go.uber.org/zap"
 )
 
@@ -20,7 +22,7 @@ const runtimeImageSourceRestoreTimeout = 3 * time.Second
 // store 负责把运行时配置持久化到 Redis，便于服务重启后恢复。
 type runtimeImageSourceBinding struct {
 	manager *RuntimeImageSourceManager
-	store   ImageSourceStore
+	store   appports.RuntimeImageSourceStore
 }
 
 // captchaRuntimeImageSourceBindings 以 CaptchaService 指针为键保存绑定关系。
@@ -75,7 +77,7 @@ func (s *CaptchaService) EnableRuntimeImageSourceManager() error {
 	// 2. store 提供持久化层，便于恢复上次配置。
 	binding := &runtimeImageSourceBinding{
 		manager: manager,
-		store:   NewImageSourceStorePortAdapter(redisadapter.NewImageSourceStore(s.rdb)),
+		store:   redisadapter.NewImageSourceStore(s.rdb),
 	}
 
 	// 先尝试从持久化存储恢复旧配置，再把结果应用到 manager。
@@ -91,12 +93,24 @@ func (s *CaptchaService) EnableRuntimeImageSourceManager() error {
 		existing, _ := actual.(*runtimeImageSourceBinding)
 		if existing != nil && existing.manager != nil {
 			s.imagePool.provider = existing.manager
+			s.imageSourceUseCase = captchaapp.NewImageSourceUseCase(
+				NewRuntimeImageSourceManagerPortAdapter(existing.manager),
+				NewImagePoolPortAdapter(s.imagePool),
+				existing.store,
+				captchaapp.ImageSourceOptions{PoolSize: s.imagePool.poolSize},
+			)
 		}
 		return nil
 	}
 
 	// 首次绑定成功后，把 imagePool 的 provider 切换到 runtime manager。
 	s.imagePool.provider = manager
+	s.imageSourceUseCase = captchaapp.NewImageSourceUseCase(
+		NewRuntimeImageSourceManagerPortAdapter(manager),
+		NewImagePoolPortAdapter(s.imagePool),
+		binding.store,
+		captchaapp.ImageSourceOptions{PoolSize: s.imagePool.poolSize},
+	)
 	// 记录启用状态，便于排查当前使用的图片源地址。
 	s.logger.Info("runtime image source manager enabled",
 		zap.String("url", manager.Status(s.imagePool.poolSize, ImagePoolSnapshot{}).Config.URL))
@@ -120,7 +134,7 @@ func (s *CaptchaService) restoreRuntimeImageSource(binding *runtimeImageSourceBi
 	defer cancel()
 
 	// 读取持久化配置。
-	cfg, found, err := binding.store.Load(ctx)
+	persisted, found, err := binding.store.Load(ctx)
 	if err != nil {
 		// 读取失败时只记录警告，不阻断服务启动。
 		s.logger.Warn("failed to load persisted runtime image source config", zap.Error(err))
@@ -130,6 +144,7 @@ func (s *CaptchaService) restoreRuntimeImageSource(binding *runtimeImageSourceBi
 	if !found {
 		return
 	}
+	cfg := imageSourceRuntimeConfigFromDomain(persisted)
 
 	// 将持久化配置转换成可运行的 provider。
 	// 如果配置已失效或字段非法，这里会返回错误。
@@ -156,17 +171,6 @@ func (s *CaptchaService) runtimeImageSourceManager() *RuntimeImageSourceManager 
 		return nil
 	}
 	return binding.manager
-}
-
-// runtimeImageSourceStore 返回当前服务绑定的图片源持久化存储。
-//
-// 主要供运行时配置保存、恢复以及调试路径使用。
-func (s *CaptchaService) runtimeImageSourceStore() ImageSourceStore {
-	binding := s.runtimeImageSourceBinding()
-	if binding == nil {
-		return nil
-	}
-	return binding.store
 }
 
 // runtimeImageSourceBinding 从全局绑定表中取出当前 CaptchaService 对应的绑定信息。

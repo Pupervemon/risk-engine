@@ -2,112 +2,118 @@ package service
 
 import (
 	"context"
+	"errors"
 
-	"go.uber.org/zap"
+	"github.com/Pupervemon/risk-engine/internal/captcha/domain"
 )
 
 // GetImageSourceStatus returns the current runtime image source status.
 func (s *CaptchaService) GetImageSourceStatus(ctx context.Context) (ImageSourceStatus, error) {
-	manager := s.runtimeImageSourceManager()
-	if manager == nil || s.imagePool == nil {
+	if s == nil || s.imageSourceUseCase == nil {
 		return ImageSourceStatus{Enabled: false}, nil
 	}
 
-	poolSnapshot, err := s.imagePool.Snapshot(ctx)
+	status, err := s.imageSourceUseCase.Status(ctx)
 	if err != nil {
-		s.logger.Warn("failed to inspect image pool contents", zap.Error(err))
-		poolSnapshot = ImagePoolSnapshot{}
+		return ImageSourceStatus{}, mapDomainImageSourceError(err)
 	}
-
-	return manager.Status(s.imagePool.poolSize, poolSnapshot), nil
+	return imageSourceStatusFromDomain(status), nil
 }
 
 // ValidateImageSource validates a candidate image source config without applying it.
 func (s *CaptchaService) ValidateImageSource(ctx context.Context, patch ImageSourcePatch) (ImageSourceValidationResult, error) {
-	manager := s.runtimeImageSourceManager()
-	if manager == nil || s.imagePool == nil {
+	if s == nil || s.imageSourceUseCase == nil {
 		return ImageSourceValidationResult{}, ErrImagePoolDisabled
 	}
 
-	candidate, err := manager.BuildCandidateConfig(patch)
-	if err != nil {
-		return ImageSourceValidationResult{}, err
-	}
-
-	if _, err := manager.ValidateConfig(ctx, candidate); err != nil {
-		return ImageSourceValidationResult{}, err
-	}
-
-	return manager.ValidationResult(candidate), nil
+	result, err := s.imageSourceUseCase.Validate(ctx, imageSourcePatchToDomain(patch))
+	return imageSourceValidationResultFromDomain(result), mapDomainImageSourceError(err)
 }
 
 // UpdateImageSource validates, persists, and applies a new runtime image source config.
 func (s *CaptchaService) UpdateImageSource(ctx context.Context, patch ImageSourcePatch, triggerRefresh bool) (ImageSourceStatus, error) {
-	manager := s.runtimeImageSourceManager()
-	if manager == nil || s.imagePool == nil {
+	if s == nil || s.imageSourceUseCase == nil {
 		return ImageSourceStatus{}, ErrImagePoolDisabled
 	}
 
-	candidate, err := manager.BuildCandidateConfig(patch)
-	if err != nil {
-		return ImageSourceStatus{}, err
-	}
-
-	provider, err := manager.ValidateConfig(ctx, candidate)
-	if err != nil {
-		return ImageSourceStatus{}, err
-	}
-
-	if err := s.persistRuntimeImageSourceConfig(ctx, candidate); err != nil {
-		status, _ := s.GetImageSourceStatus(ctx)
-		return status, &ImageSourcePersistenceError{Err: err}
-	}
-
-	manager.ApplyConfig(candidate, provider)
-
-	if triggerRefresh {
-		err = s.imagePool.RefreshWithProvider(ctx, provider)
-		manager.RecordRefreshResult(err)
-
-		status, _ := s.GetImageSourceStatus(ctx)
-		if err != nil {
-			return status, &ImageSourceRefreshError{Err: err}
-		}
-
-		return status, nil
-	}
-
-	return s.GetImageSourceStatus(ctx)
+	status, err := s.imageSourceUseCase.Update(ctx, imageSourcePatchToDomain(patch), triggerRefresh)
+	return imageSourceStatusFromDomain(status), mapDomainImageSourceError(err)
 }
 
 // RefreshImagePool refreshes the image pool with the currently active runtime config.
 func (s *CaptchaService) RefreshImagePool(ctx context.Context) (ImageSourceStatus, error) {
-	manager := s.runtimeImageSourceManager()
-	if manager == nil || s.imagePool == nil {
+	if s == nil || s.imageSourceUseCase == nil {
 		return ImageSourceStatus{}, ErrImagePoolDisabled
 	}
 
-	err := s.imagePool.RefreshNow(ctx)
-	manager.RecordRefreshResult(err)
-
-	status, _ := s.GetImageSourceStatus(ctx)
-	if err != nil {
-		return status, &ImageSourceRefreshError{Err: err}
-	}
-
-	return status, nil
+	status, err := s.imageSourceUseCase.Refresh(ctx)
+	return imageSourceStatusFromDomain(status), mapDomainImageSourceError(err)
 }
 
-func (s *CaptchaService) persistRuntimeImageSourceConfig(ctx context.Context, cfg ImageSourceRuntimeConfig) error {
-	store := s.runtimeImageSourceStore()
-	if store == nil {
+func imageSourcePatchToDomain(patch ImageSourcePatch) domain.ImageSourcePatch {
+	return domain.ImageSourcePatch{
+		URL:                patch.URL,
+		APIKey:             patch.APIKey,
+		TimeoutSeconds:     patch.TimeoutSeconds,
+		RateLimitPerMinute: patch.RateLimitPerMinute,
+		RetryCount:         patch.RetryCount,
+	}
+}
+
+func imageSourceStatusFromDomain(status domain.ImageSourceStatus) ImageSourceStatus {
+	return ImageSourceStatus{
+		Enabled:             status.Enabled,
+		Version:             status.Version,
+		Config:              imageSourceConfigViewFromDomain(status.Config),
+		UpdatedAt:           status.UpdatedAt,
+		LastValidatedAt:     status.LastValidatedAt,
+		LastValidationError: status.LastValidationError,
+		LastRefreshedAt:     status.LastRefreshedAt,
+		LastRefreshError:    status.LastRefreshError,
+		PoolSize:            status.PoolSize,
+		PoolImageCount:      status.PoolImageCount,
+		ActiveGeneration:    status.ActiveGeneration,
+		GenerationCount:     status.GenerationCount,
+	}
+}
+
+func imageSourceValidationResultFromDomain(result domain.ImageSourceValidationResult) ImageSourceValidationResult {
+	return ImageSourceValidationResult{
+		Config:      imageSourceConfigViewFromDomain(result.Config),
+		ValidatedAt: result.ValidatedAt,
+	}
+}
+
+func imageSourceConfigViewFromDomain(config domain.ImageSourceConfigView) ImageSourceConfigView {
+	return ImageSourceConfigView{
+		URL:                config.URL,
+		APIKeyConfigured:   config.APIKeyConfigured,
+		TimeoutSeconds:     config.TimeoutSeconds,
+		RateLimitPerMinute: config.RateLimitPerMinute,
+		RetryCount:         config.RetryCount,
+	}
+}
+
+func mapDomainImageSourceError(err error) error {
+	if err == nil {
 		return nil
 	}
-
-	if err := store.Save(ctx, cfg); err != nil {
-		s.logger.Error("failed to persist runtime image source config", zap.Error(err))
-		return err
+	if errors.Is(err, domain.ErrImagePoolDisabled) {
+		return ErrImagePoolDisabled
+	}
+	if errors.Is(err, domain.ErrImagePoolRefreshInProgress) {
+		return ErrImagePoolRefreshInProgress
 	}
 
-	return nil
+	var refreshErr *domain.ImageSourceRefreshError
+	if errors.As(err, &refreshErr) {
+		return &ImageSourceRefreshError{Err: refreshErr.Err}
+	}
+
+	var persistenceErr *domain.ImageSourcePersistenceError
+	if errors.As(err, &persistenceErr) {
+		return &ImageSourcePersistenceError{Err: persistenceErr.Err}
+	}
+
+	return err
 }

@@ -15,12 +15,13 @@ import (
 )
 
 type CaptchaService struct {
-	rdb            *redis.Client
-	cfg            *config.CaptchaConfigSpec
-	logger         *zap.Logger
-	imagePool      *RedisImagePool
-	useImagePool   bool
-	captchaUseCase appports.CaptchaUseCase
+	rdb                *redis.Client
+	cfg                *config.CaptchaConfigSpec
+	logger             *zap.Logger
+	imagePool          *RedisImagePool
+	useImagePool       bool
+	captchaUseCase     appports.CaptchaUseCase
+	imageSourceUseCase appports.ImageSourceUseCase
 }
 
 // SliderChallenge is the legacy service DTO returned to older callers.
