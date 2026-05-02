@@ -55,6 +55,8 @@ func (s *CaptchaService) EnableRuntimeImageSourceManager() error {
 		height = 180
 	}
 
+	providerFactory := NewExternalImageProviderFactory(s.logger, width, height)
+
 	// 创建运行时图片源管理器。
 	// 它负责接收新的运行时配置，并驱动 imagePool 使用新的 provider。
 	manager, err := NewRuntimeImageSourceManager(
@@ -62,6 +64,7 @@ func (s *CaptchaService) EnableRuntimeImageSourceManager() error {
 		s.logger,
 		width,
 		height,
+		providerFactory,
 	)
 	if err != nil {
 		return err
@@ -130,7 +133,7 @@ func (s *CaptchaService) restoreRuntimeImageSource(binding *runtimeImageSourceBi
 
 	// 将持久化配置转换成可运行的 provider。
 	// 如果配置已失效或字段非法，这里会返回错误。
-	provider, err := buildRuntimeImageProvider(cfg, s.logger, binding.manager.width, binding.manager.height)
+	provider, err := binding.manager.buildRuntimeProvider(cfg)
 	if err != nil {
 		// 配置不合法时，保留现有文件配置，避免因为脏数据影响服务可用性。
 		s.logger.Warn("persisted runtime image source config is invalid; keeping file config",

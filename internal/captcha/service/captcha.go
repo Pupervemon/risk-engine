@@ -66,7 +66,8 @@ func NewCaptchaService(rdb *redis.Client, cfg *config.CaptchaConfigSpec, logger 
 			RetryCount:         cfg.ExternalImageAPI.RetryCount,
 		}
 
-		provider := CustomImageFetcher(apiConfig, logger, width, height)
+		providerFactory := NewExternalImageProviderFactory(logger, width, height)
+		provider := providerFactory.BuildImagePoolProvider(apiConfig)
 		service.imagePool = NewRedisImagePool(rdb, logger, provider, poolSize)
 
 		logger.Info("图片池已初始化",

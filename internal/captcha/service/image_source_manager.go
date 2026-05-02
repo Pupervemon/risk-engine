@@ -128,9 +128,10 @@ type ImageSourceValidationResult struct {
 // 它既保存当前生效的配置，也保存用于读取图片的 provider，
 // 并通过内部锁保护这些状态，保证并发读取和热更新时的一致性。
 type RuntimeImageSourceManager struct {
-	logger *zap.Logger
-	width  int
-	height int
+	logger          *zap.Logger
+	width           int
+	height          int
+	providerFactory RuntimeImageProviderFactory
 
 	mu                  sync.RWMutex
 	config              ImageSourceRuntimeConfig
@@ -147,16 +148,19 @@ type RuntimeImageSourceManager struct {
 //
 // 初始化时会先规范化并校验输入配置，再基于配置构造初始 provider，
 // 这样 manager 一创建出来就已经可以直接服务请求。
-func NewRuntimeImageSourceManager(initial ImageSourceRuntimeConfig, logger *zap.Logger, width, height int) (*RuntimeImageSourceManager, error) {
+func NewRuntimeImageSourceManager(initial ImageSourceRuntimeConfig, logger *zap.Logger, width, height int, providerFactory RuntimeImageProviderFactory) (*RuntimeImageSourceManager, error) {
 	// 允许调用方不传 logger，避免后续日志调用空指针。
 	if logger == nil {
 		logger = zap.NewNop()
+	}
+	if providerFactory == nil {
+		providerFactory = NewExternalImageProviderFactory(logger, width, height)
 	}
 
 	// 先做清理，去掉 URL / APIKey 两侧空白，减少配置输入错误带来的干扰。
 	initial = normalizeImageSourceRuntimeConfig(initial)
 	// 基于初始配置构造 provider；如果配置本身不合法，这里会直接返回错误。
-	provider, err := buildRuntimeImageProvider(initial, logger, width, height)
+	provider, err := providerFactory.BuildRuntimeProvider(initial)
 	if err != nil {
 		return nil, err
 	}
@@ -165,13 +169,14 @@ func NewRuntimeImageSourceManager(initial ImageSourceRuntimeConfig, logger *zap.
 	// updatedAt 记录首次可用时间，便于状态接口和排障使用。
 	now := time.Now()
 	return &RuntimeImageSourceManager{
-		logger:    logger,
-		width:     width,
-		height:    height,
-		config:    initial,
-		provider:  provider,
-		version:   1,
-		updatedAt: now,
+		logger:          logger,
+		width:           width,
+		height:          height,
+		providerFactory: providerFactory,
+		config:          initial,
+		provider:        provider,
+		version:         1,
+		updatedAt:       now,
 	}, nil
 }
 
@@ -233,7 +238,7 @@ func (m *RuntimeImageSourceManager) BuildCandidateConfig(patch ImageSourcePatch)
 // 用来确认这份配置不仅“看起来正确”，而且“实际可用”。
 func (m *RuntimeImageSourceManager) ValidateConfig(ctx context.Context, candidate ImageSourceRuntimeConfig) (ImageProvider, error) {
 	// 先尝试基于候选配置构造 provider。
-	provider, err := buildRuntimeImageProvider(candidate, m.logger, m.width, m.height)
+	provider, err := m.buildRuntimeProvider(candidate)
 	if err == nil {
 		var images []ImageMeta
 		// 再做一次真实拉取，避免配置虽然合法但上游实际上不可用。
@@ -351,6 +356,13 @@ func (m *RuntimeImageSourceManager) activeProvider() ImageProvider {
 	return m.provider
 }
 
+func (m *RuntimeImageSourceManager) buildRuntimeProvider(cfg ImageSourceRuntimeConfig) (ImageProvider, error) {
+	if m == nil || m.providerFactory == nil {
+		return nil, fmt.Errorf("image provider factory is not configured")
+	}
+	return m.providerFactory.BuildRuntimeProvider(cfg)
+}
+
 // recordValidationResult 记录最近一次配置校验的时间和结果。
 //
 // 成功时会清空错误信息，失败时会保存错误字符串，方便 Status 接口展示。
@@ -367,17 +379,6 @@ func (m *RuntimeImageSourceManager) recordValidationResult(err error) {
 	}
 
 	m.lastValidationError = ""
-}
-
-// buildRuntimeImageProvider 根据运行时配置构造真正执行抓取的 provider。
-//
-// 这里会先做配置合法性校验，再将运行时配置转换成底层 fetcher 所需的结构。
-func buildRuntimeImageProvider(cfg ImageSourceRuntimeConfig, logger *zap.Logger, width, height int) (ImageProvider, error) {
-	if err := validateImageSourceRuntimeConfig(cfg); err != nil {
-		return nil, err
-	}
-
-	return NewExternalImageFetcher(cfg.fetcherConfig(), logger, width, height), nil
 }
 
 // normalizeImageSourceRuntimeConfig 对运行时配置做轻量级清理。
