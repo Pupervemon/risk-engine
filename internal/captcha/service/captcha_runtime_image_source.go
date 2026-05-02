@@ -5,6 +5,7 @@ import (
 	"sync"
 	"time"
 
+	redisadapter "github.com/Pupervemon/risk-engine/internal/captcha/adapter/outbound/redis"
 	"go.uber.org/zap"
 )
 
@@ -71,7 +72,7 @@ func (s *CaptchaService) EnableRuntimeImageSourceManager() error {
 	// 2. store 提供持久化层，便于恢复上次配置。
 	binding := &runtimeImageSourceBinding{
 		manager: manager,
-		store:   NewRedisImageSourceStore(s.rdb),
+		store:   NewImageSourceStorePortAdapter(redisadapter.NewImageSourceStore(s.rdb)),
 	}
 
 	// 先尝试从持久化存储恢复旧配置，再把结果应用到 manager。
