@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	captchaadapter "github.com/Pupervemon/risk-engine/internal/captcha/adapter/outbound/captcha"
 	redisadapter "github.com/Pupervemon/risk-engine/internal/captcha/adapter/outbound/redis"
@@ -22,6 +23,8 @@ type CaptchaService struct {
 	useImagePool       bool
 	captchaUseCase     appports.CaptchaUseCase
 	imageSourceUseCase appports.ImageSourceUseCase
+	imageSourceMu      sync.RWMutex
+	imageSourceBinding *runtimeImageSourceBinding
 }
 
 // SliderChallenge is the legacy service DTO returned to older callers.

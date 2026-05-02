@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"sync"
 	"time"
 
 	redisadapter "github.com/Pupervemon/risk-engine/internal/captcha/adapter/outbound/redis"
@@ -25,11 +24,6 @@ type runtimeImageSourceBinding struct {
 	store   appports.RuntimeImageSourceStore
 }
 
-// captchaRuntimeImageSourceBindings 以 CaptchaService 指针为键保存绑定关系。
-//
-// 使用 sync.Map 的原因是：该绑定可能在服务启动、请求处理或配置恢复等多个并发路径中访问。
-var captchaRuntimeImageSourceBindings sync.Map
-
 // EnableRuntimeImageSourceManager 为当前验证码服务实例启用可运行时切换的图片源管理器。
 //
 // 启用后，图片源不再只依赖静态配置文件，而是可以在服务运行期间切换，
@@ -41,8 +35,11 @@ func (s *CaptchaService) EnableRuntimeImageSourceManager() error {
 		return nil
 	}
 
+	s.imageSourceMu.Lock()
+	defer s.imageSourceMu.Unlock()
+
 	// 如果当前服务已经绑定过 runtime image source manager，则幂等返回。
-	if _, ok := captchaRuntimeImageSourceBindings.Load(s); ok {
+	if s.imageSourceBinding != nil {
 		return nil
 	}
 
@@ -84,27 +81,9 @@ func (s *CaptchaService) EnableRuntimeImageSourceManager() error {
 	// 这样可以保证服务重启后尽可能延续上一次的运行时图片源。
 	s.restoreRuntimeImageSource(binding)
 
-	// 使用 LoadOrStore 处理并发初始化：如果别的 goroutine 已经完成绑定，
-	// 当前调用就复用已有绑定，避免重复创建和覆盖。
-	actual, loaded := captchaRuntimeImageSourceBindings.LoadOrStore(s, binding)
-	if loaded {
-		// 这里可能说明另一个并发初始化先一步完成了绑定。
-		// 需要把当前 imagePool 的 provider 指向已存在的 manager，确保调用方使用一致的运行时管理器。
-		existing, _ := actual.(*runtimeImageSourceBinding)
-		if existing != nil && existing.manager != nil {
-			s.imagePool.provider = existing.manager
-			s.imageSourceUseCase = captchaapp.NewImageSourceUseCase(
-				NewRuntimeImageSourceManagerPortAdapter(existing.manager),
-				NewImagePoolPortAdapter(s.imagePool),
-				existing.store,
-				captchaapp.ImageSourceOptions{PoolSize: s.imagePool.poolSize},
-			)
-		}
-		return nil
-	}
-
 	// 首次绑定成功后，把 imagePool 的 provider 切换到 runtime manager。
 	s.imagePool.provider = manager
+	s.imageSourceBinding = binding
 	s.imageSourceUseCase = captchaapp.NewImageSourceUseCase(
 		NewRuntimeImageSourceManagerPortAdapter(manager),
 		NewImagePoolPortAdapter(s.imagePool),
@@ -182,13 +161,8 @@ func (s *CaptchaService) runtimeImageSourceBinding() *runtimeImageSourceBinding 
 		return nil
 	}
 
-	// 通过服务指针作为键查找绑定。
-	value, ok := captchaRuntimeImageSourceBindings.Load(s)
-	if !ok {
-		return nil
-	}
-
-	// 这里只做类型断言；如果存储内容不符合预期，则返回 nil。
-	binding, _ := value.(*runtimeImageSourceBinding)
+	s.imageSourceMu.RLock()
+	binding := s.imageSourceBinding
+	s.imageSourceMu.RUnlock()
 	return binding
 }
