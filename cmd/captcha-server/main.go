@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	grpcadapter "github.com/Pupervemon/risk-engine/internal/captcha/adapter/inbound/grpc"
 	captchaservice "github.com/Pupervemon/risk-engine/internal/captcha/service"
 	httptransport "github.com/Pupervemon/risk-engine/internal/captcha/transport/http"
 	"github.com/Pupervemon/risk-engine/internal/shared/config"
@@ -99,7 +100,7 @@ func main() {
 	tokenUseCase := captchaservice.NewTokenUseCaseAdapter(tokenService)
 	imageSourceUseCase := captchaservice.NewImageSourceUseCaseAdapter(captchaService)
 	// gRPC 暴露的服务实现基于 token use case，提供给外部系统直接调用。
-	grpcService := captchaservice.NewCaptchaTokenService(tokenUseCase)
+	grpcService := grpcadapter.NewCaptchaTokenService(tokenUseCase)
 
 	// 如果配置启用了图片池，则启动后台刷新任务，定期预热可用图片资源。
 	if cfg.Captcha.ImagePool.Enabled {

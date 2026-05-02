@@ -3,6 +3,7 @@ package domain
 import "errors"
 
 var (
+	ErrCaptchaNotFound            = errors.New("captcha not found")
 	ErrImagePoolDisabled          = errors.New("captcha image pool is disabled")
 	ErrImagePoolRefreshInProgress = errors.New("captcha image pool refresh is already in progress")
 )
