@@ -22,6 +22,7 @@ type CaptchaService struct {
 	imagePool          *RedisImagePool
 	useImagePool       bool
 	captchaUseCase     appports.CaptchaUseCase
+	lifecycle          appports.CaptchaLifecycle
 	imageSourceUseCase appports.ImageSourceUseCase
 	imageSourceMu      sync.RWMutex
 	imageSourceBinding *runtimeImageSourceBinding
@@ -96,6 +97,11 @@ func NewCaptchaService(rdb *redis.Client, cfg *config.CaptchaConfigSpec, logger 
 		imagePool,
 		captchaOptionsFromSharedConfig(cfg),
 	)
+	service.lifecycle = captchaapp.NewCaptchaLifecycle(
+		imagePool,
+		lifecycleOptionsFromSharedConfig(cfg),
+		logger,
+	)
 
 	return service
 }
@@ -144,39 +150,16 @@ func (s *CaptchaService) VerifyWithTrack(ctx context.Context, captchaID string, 
 
 // StartImageRefresh starts the image-pool refresh job.
 func (s *CaptchaService) StartImageRefresh(ctx context.Context) error {
-	if !s.useImagePool || s.imagePool == nil {
-		s.logger.Info("图片池未启用，跳过刷新任务")
+	if s == nil || s.lifecycle == nil {
 		return nil
 	}
-
-	refreshInterval := s.cfg.ImagePool.GetRefreshInterval()
-	currentCount, err := s.imagePool.Count(ctx)
-	refreshOnStartup := true
-	if err != nil {
-		s.logger.Warn("failed to inspect image pool before startup refresh; falling back to immediate refresh",
-			zap.Error(err))
-	} else if !shouldRefreshImagePoolOnStartup(currentCount) {
-		refreshOnStartup = false
-		s.logger.Info("image pool already contains cached images; skipping immediate startup refresh",
-			zap.Int64("current_count", currentCount))
-	} else {
-		s.logger.Info("image pool is empty; performing immediate startup refresh",
-			zap.Int64("current_count", currentCount))
-	}
-
-	s.imagePool.StartRefresh(ctx, refreshInterval, refreshOnStartup)
-
-	s.logger.Info("图片池刷新任务已启动",
-		zap.Duration("interval", refreshInterval))
-
-	return nil
+	return s.lifecycle.StartImageRefresh(ctx)
 }
 
 // StopImageRefresh stops the image-pool refresh job.
 func (s *CaptchaService) StopImageRefresh() {
-	if s.imagePool != nil {
-		s.imagePool.StopRefresh()
-		s.logger.Info("图片池刷新任务已停止")
+	if s != nil && s.lifecycle != nil {
+		s.lifecycle.StopImageRefresh()
 	}
 }
 
@@ -232,6 +215,18 @@ func slideGeneratorOptionsFromSharedConfig(cfg *config.CaptchaConfigSpec) captch
 	}
 }
 
+func lifecycleOptionsFromSharedConfig(cfg *config.CaptchaConfigSpec) captchaapp.LifecycleOptions {
+	if cfg == nil {
+		return captchaapp.LifecycleOptions{RefreshOnStartupProbe: true}
+	}
+
+	return captchaapp.LifecycleOptions{
+		ImagePoolEnabled:      cfg.ImagePool.Enabled,
+		ImageRefreshInterval:  cfg.ImagePool.GetRefreshInterval(),
+		RefreshOnStartupProbe: true,
+	}
+}
+
 func serviceTrackPointsToDomain(points *[]TrackPoint) []domain.TrackPoint {
 	if points == nil {
 		return nil
@@ -261,8 +256,4 @@ func normalizedHeight(height int) int {
 		return 180
 	}
 	return height
-}
-
-func shouldRefreshImagePoolOnStartup(existingCount int64) bool {
-	return existingCount <= 0
 }

@@ -2,6 +2,7 @@ package service
 
 import (
 	imageadapter "github.com/Pupervemon/risk-engine/internal/captcha/adapter/outbound/image"
+	appports "github.com/Pupervemon/risk-engine/internal/captcha/application/ports"
 	"go.uber.org/zap"
 )
 
@@ -9,7 +10,7 @@ type ExternalImageAPIConfig = imageadapter.ExternalImageAPIConfig
 
 // RuntimeImageProviderFactory builds providers for runtime image-source config.
 type RuntimeImageProviderFactory interface {
-	BuildRuntimeProvider(cfg ImageSourceRuntimeConfig) (ImageProvider, error)
+	BuildRuntimeProvider(cfg ImageSourceRuntimeConfig) (appports.ImageProvider, error)
 }
 
 // ExternalImageProviderFactory keeps provider construction behind a boundary
@@ -34,18 +35,14 @@ func NewExternalImageProviderFactory(logger *zap.Logger, width, height int) *Ext
 	}
 }
 
-func (f *ExternalImageProviderFactory) BuildRuntimeProvider(cfg ImageSourceRuntimeConfig) (ImageProvider, error) {
+func (f *ExternalImageProviderFactory) BuildRuntimeProvider(cfg ImageSourceRuntimeConfig) (appports.ImageProvider, error) {
 	if err := validateImageSourceRuntimeConfig(cfg); err != nil {
 		return nil, err
 	}
 
-	return serviceImageProviderAdapter{
-		provider: imageadapter.NewExternalImageFetcher(cfg.fetcherConfig(), f.logger, f.width, f.height),
-	}, nil
+	return imageadapter.NewExternalImageFetcher(cfg.fetcherConfig(), f.logger, f.width, f.height), nil
 }
 
-func (f *ExternalImageProviderFactory) BuildImagePoolProvider(cfg ExternalImageAPIConfig) ImageProvider {
-	return serviceImageProviderAdapter{
-		provider: imageadapter.CustomImageFetcher(cfg, f.logger, f.width, f.height),
-	}
+func (f *ExternalImageProviderFactory) BuildImagePoolProvider(cfg ExternalImageAPIConfig) appports.ImageProvider {
+	return imageadapter.CustomImageFetcher(cfg, f.logger, f.width, f.height)
 }

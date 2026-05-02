@@ -40,11 +40,7 @@ func (a *ImagePoolPortAdapter) Snapshot(ctx context.Context) (domain.ImagePoolSn
 	if err != nil {
 		return domain.ImagePoolSnapshot{}, err
 	}
-	return domain.ImagePoolSnapshot{
-		ImageCount:       snapshot.ImageCount,
-		ActiveGeneration: snapshot.ActiveGeneration,
-		GenerationCount:  snapshot.GenerationCount,
-	}, nil
+	return snapshot, nil
 }
 
 func (a *ImagePoolPortAdapter) Refresh(ctx context.Context) error {
@@ -58,7 +54,7 @@ func (a *ImagePoolPortAdapter) RefreshWithProvider(ctx context.Context, provider
 	if a == nil || a.pool == nil {
 		return fmt.Errorf("captcha image pool is not configured")
 	}
-	return a.pool.RefreshWithProvider(ctx, serviceImageProviderAdapter{provider: provider})
+	return a.pool.RefreshWithProvider(ctx, provider)
 }
 
 func (a *ImagePoolPortAdapter) Start(ctx context.Context, interval time.Duration, refreshOnStartup bool) {
@@ -71,32 +67,4 @@ func (a *ImagePoolPortAdapter) Stop() {
 	if a != nil && a.pool != nil {
 		a.pool.StopRefresh()
 	}
-}
-
-type serviceImageProviderAdapter struct {
-	provider appports.ImageProvider
-}
-
-var _ ImageProvider = serviceImageProviderAdapter{}
-
-func (a serviceImageProviderAdapter) FetchImages(ctx context.Context, count int) ([]ImageMeta, error) {
-	if a.provider == nil {
-		return nil, fmt.Errorf("image provider is not configured")
-	}
-
-	images, err := a.provider.FetchImages(ctx, count)
-	if err != nil {
-		return nil, err
-	}
-
-	converted := make([]ImageMeta, 0, len(images))
-	for _, image := range images {
-		converted = append(converted, ImageMeta{
-			ID:   image.ID,
-			Data: image.Data,
-			URL:  image.URL,
-		})
-	}
-
-	return converted, nil
 }

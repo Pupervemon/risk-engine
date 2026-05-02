@@ -9,7 +9,7 @@ import (
 )
 
 type LifecycleOptions struct {
-	ImagePoolEnabled       bool
+	ImagePoolEnabled      bool
 	ImageRefreshInterval  time.Duration
 	RefreshOnStartupProbe bool
 }
@@ -34,7 +34,10 @@ func NewCaptchaLifecycle(imagePool appports.BackgroundImagePool, opts LifecycleO
 }
 
 func (l *CaptchaLifecycle) StartImageRefresh(ctx context.Context) error {
-	if l == nil || !l.opts.ImagePoolEnabled || l.imagePool == nil {
+	if l == nil {
+		return nil
+	}
+	if !l.opts.ImagePoolEnabled || l.imagePool == nil {
 		l.logger.Info("image pool is disabled, skipping refresh job")
 		return nil
 	}

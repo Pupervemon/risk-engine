@@ -10,6 +10,7 @@ import (
 	"time"
 
 	redisadapter "github.com/Pupervemon/risk-engine/internal/captcha/adapter/outbound/redis"
+	appports "github.com/Pupervemon/risk-engine/internal/captcha/application/ports"
 	"github.com/Pupervemon/risk-engine/internal/captcha/domain"
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
@@ -25,51 +26,53 @@ const (
 var ErrImagePoolRefreshInProgress = errors.New("captcha image pool refresh is already in progress")
 
 // ImageMeta contains normalized image data stored in the captcha image pool.
-type ImageMeta struct {
-	ID   string
-	Data []byte
-	URL  string
-}
+type ImageMeta = domain.ImageMeta
 
 // ImageProvider fetches images from an upstream source.
-type ImageProvider interface {
-	FetchImages(ctx context.Context, count int) ([]ImageMeta, error)
-}
+type ImageProvider = appports.ImageProvider
 
 // RedisImagePool coordinates image-pool refresh scheduling while delegating
 // Redis generation storage to the outbound repository.
 type RedisImagePool struct {
-	logger        *zap.Logger
-	provider      ImageProvider
-	poolSize      int
-	repository    *redisadapter.ImagePoolRepository
-	refreshTicker *time.Ticker
-	midnightTimer *time.Timer
-	stopChan      chan struct{}
-	stopOnce      sync.Once
-	refreshMu     sync.Mutex
+	logger     *zap.Logger
+	provider   ImageProvider
+	poolSize   int
+	repository imagePoolRepository
+	scheduler  *imagePoolRefreshScheduler
+	refreshMu  sync.Mutex
 }
 
 // ImagePoolSnapshot describes the current active image-pool generation state.
-type ImagePoolSnapshot struct {
-	ImageCount       int64
-	ActiveGeneration string
-	GenerationCount  int64
+type ImagePoolSnapshot = domain.ImagePoolSnapshot
+
+type imagePoolRepository interface {
+	Random(ctx context.Context) ([]byte, error)
+	Count(ctx context.Context) (int64, error)
+	Snapshot(ctx context.Context) (domain.ImagePoolSnapshot, error)
+	LoadImagesIntoGeneration(ctx context.Context, generation string, images []domain.ImageMeta) (string, error)
+	CleanupStaleGenerations(ctx context.Context, generationsToKeep int) error
+	AcquireRefreshLock(ctx context.Context, token string, ttl time.Duration) (bool, error)
+	ReleaseRefreshLock(ctx context.Context, token string) error
 }
 
 // NewRedisImagePool creates a Redis-backed image pool.
 func NewRedisImagePool(rdb *redis.Client, logger *zap.Logger, provider ImageProvider, poolSize int) *RedisImagePool {
+	return newRedisImagePool(redisadapter.NewImagePoolRepository(rdb), logger, provider, poolSize)
+}
+
+func newRedisImagePool(repository imagePoolRepository, logger *zap.Logger, provider ImageProvider, poolSize int) *RedisImagePool {
 	if logger == nil {
 		logger = zap.NewNop()
 	}
 
-	return &RedisImagePool{
+	pool := &RedisImagePool{
 		logger:     logger,
 		provider:   provider,
 		poolSize:   poolSize,
-		repository: redisadapter.NewImagePoolRepository(rdb),
-		stopChan:   make(chan struct{}),
+		repository: repository,
 	}
+	pool.scheduler = newImagePoolRefreshScheduler(logger, poolSize, pool.RefreshNow)
+	return pool
 }
 
 // LoadImages replaces the current image pool contents with the supplied images.
@@ -111,87 +114,23 @@ func (p *RedisImagePool) Snapshot(ctx context.Context) (ImagePoolSnapshot, error
 		return ImagePoolSnapshot{}, err
 	}
 
-	snapshot, err := repository.Snapshot(ctx)
-	if err != nil {
-		return ImagePoolSnapshot{}, err
-	}
-
-	return ImagePoolSnapshot{
-		ImageCount:       snapshot.ImageCount,
-		ActiveGeneration: snapshot.ActiveGeneration,
-		GenerationCount:  snapshot.GenerationCount,
-	}, nil
+	return repository.Snapshot(ctx)
 }
 
 // StartRefresh starts the image-pool refresh job.
 // It may perform an immediate warm-up refresh and then keeps the pool fresh via
 // the configured interval plus a local-midnight daily refresh.
 func (p *RedisImagePool) StartRefresh(ctx context.Context, interval time.Duration, refreshOnStartup bool) {
-	nextMidnightAt := nextMidnightRefreshTime(time.Now())
-	p.logger.Info("starting image pool refresh job",
-		zap.Duration("interval", interval),
-		zap.Int("pool_size", p.poolSize),
-		zap.Bool("refresh_on_startup", refreshOnStartup),
-		zap.Time("next_midnight_refresh_at", nextMidnightAt))
-
-	if refreshOnStartup {
-		if err := p.RefreshNow(ctx); err != nil {
-			p.logger.Error("initial image refresh failed", zap.Error(err))
-		}
-	} else {
-		p.logger.Info("skipping initial image refresh because the pool already has cached images")
+	if p != nil && p.scheduler != nil {
+		p.scheduler.Start(ctx, interval, refreshOnStartup)
 	}
-
-	if interval > 0 {
-		p.refreshTicker = time.NewTicker(interval)
-	}
-	p.midnightTimer = time.NewTimer(nextMidnightRefreshDelay(time.Now()))
-
-	go func() {
-		for {
-			var intervalChan <-chan time.Time
-			if p.refreshTicker != nil {
-				intervalChan = p.refreshTicker.C
-			}
-
-			var midnightChan <-chan time.Time
-			if p.midnightTimer != nil {
-				midnightChan = p.midnightTimer.C
-			}
-
-			select {
-			case <-intervalChan:
-				if err := p.RefreshNow(ctx); err != nil {
-					p.logger.Error("scheduled image refresh failed", zap.Error(err))
-				}
-			case <-midnightChan:
-				if err := p.RefreshNow(ctx); err != nil {
-					p.logger.Error("midnight image refresh failed", zap.Error(err))
-				}
-
-				nextMidnightAt := nextMidnightRefreshTime(time.Now())
-				p.logger.Info("scheduled next midnight image refresh",
-					zap.Time("next_midnight_refresh_at", nextMidnightAt))
-				p.midnightTimer.Reset(nextMidnightRefreshDelay(time.Now()))
-			case <-p.stopChan:
-				p.logger.Info("image pool refresh job stopped")
-				return
-			}
-		}
-	}()
 }
 
 // StopRefresh stops the periodic image refresh job.
 func (p *RedisImagePool) StopRefresh() {
-	if p.refreshTicker != nil {
-		p.refreshTicker.Stop()
+	if p != nil && p.scheduler != nil {
+		p.scheduler.Stop()
 	}
-	if p.midnightTimer != nil {
-		p.midnightTimer.Stop()
-	}
-	p.stopOnce.Do(func() {
-		close(p.stopChan)
-	})
 }
 
 // RefreshNow refreshes the pool using the active provider.
@@ -257,7 +196,7 @@ func (p *RedisImagePool) loadImagesIntoGeneration(ctx context.Context, generatio
 		return err
 	}
 
-	previousGeneration, err := repository.LoadImagesIntoGeneration(ctx, generation, imageMetasToDomain(images))
+	previousGeneration, err := repository.LoadImagesIntoGeneration(ctx, generation, images)
 	if err != nil {
 		p.logger.Error("failed to load images into redis",
 			zap.Error(err),
@@ -338,20 +277,6 @@ func (p *RedisImagePool) releaseRefreshLock(token string) {
 	}
 }
 
-func nextMidnightRefreshTime(now time.Time) time.Time {
-	return time.Date(
-		now.Year(),
-		now.Month(),
-		now.Day()+1,
-		0, 0, 0, 0,
-		now.Location(),
-	)
-}
-
-func nextMidnightRefreshDelay(now time.Time) time.Duration {
-	return nextMidnightRefreshTime(now).Sub(now)
-}
-
 func newImagePoolGeneration() (string, error) {
 	suffix, err := newImagePoolToken()
 	if err != nil {
@@ -370,21 +295,9 @@ func newImagePoolToken() (string, error) {
 	return hex.EncodeToString(buf), nil
 }
 
-func (p *RedisImagePool) imagePoolRepository() (*redisadapter.ImagePoolRepository, error) {
+func (p *RedisImagePool) imagePoolRepository() (imagePoolRepository, error) {
 	if p == nil || p.repository == nil {
 		return nil, fmt.Errorf("image pool repository is not configured")
 	}
 	return p.repository, nil
-}
-
-func imageMetasToDomain(images []ImageMeta) []domain.ImageMeta {
-	converted := make([]domain.ImageMeta, 0, len(images))
-	for _, image := range images {
-		converted = append(converted, domain.ImageMeta{
-			ID:   image.ID,
-			Data: image.Data,
-			URL:  image.URL,
-		})
-	}
-	return converted
 }

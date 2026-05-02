@@ -7,6 +7,7 @@ import (
 	redisadapter "github.com/Pupervemon/risk-engine/internal/captcha/adapter/outbound/redis"
 	captchaapp "github.com/Pupervemon/risk-engine/internal/captcha/application"
 	appports "github.com/Pupervemon/risk-engine/internal/captcha/application/ports"
+	"github.com/Pupervemon/risk-engine/internal/captcha/domain"
 	"go.uber.org/zap"
 )
 
@@ -92,7 +93,7 @@ func (s *CaptchaService) EnableRuntimeImageSourceManager() error {
 	)
 	// 记录启用状态，便于排查当前使用的图片源地址。
 	s.logger.Info("runtime image source manager enabled",
-		zap.String("url", manager.Status(s.imagePool.poolSize, ImagePoolSnapshot{}).Config.URL))
+		zap.String("url", manager.Status(s.imagePool.poolSize, domain.ImagePoolSnapshot{}).Config.URL))
 	return nil
 }
 

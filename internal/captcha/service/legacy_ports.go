@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	appports "github.com/Pupervemon/risk-engine/internal/captcha/application/ports"
@@ -127,103 +126,42 @@ func (a *ImageSourceUseCaseAdapter) Status(ctx context.Context) (domain.ImageSou
 	if a == nil || a.service == nil {
 		return domain.ImageSourceStatus{}, fmt.Errorf("captcha service is not configured")
 	}
+	if a.service.imageSourceUseCase == nil {
+		return domain.ImageSourceStatus{Enabled: false}, nil
+	}
 
-	status, err := a.service.GetImageSourceStatus(ctx)
-	return imageSourceStatusToDomain(status), mapImageSourceError(err)
+	return a.service.imageSourceUseCase.Status(ctx)
 }
 
 func (a *ImageSourceUseCaseAdapter) Validate(ctx context.Context, patch domain.ImageSourcePatch) (domain.ImageSourceValidationResult, error) {
 	if a == nil || a.service == nil {
 		return domain.ImageSourceValidationResult{}, fmt.Errorf("captcha service is not configured")
 	}
+	if a.service.imageSourceUseCase == nil {
+		return domain.ImageSourceValidationResult{}, domain.ErrImagePoolDisabled
+	}
 
-	result, err := a.service.ValidateImageSource(ctx, imageSourcePatchFromDomain(patch))
-	return imageSourceValidationResultToDomain(result), mapImageSourceError(err)
+	return a.service.imageSourceUseCase.Validate(ctx, patch)
 }
 
 func (a *ImageSourceUseCaseAdapter) Update(ctx context.Context, patch domain.ImageSourcePatch, triggerRefresh bool) (domain.ImageSourceStatus, error) {
 	if a == nil || a.service == nil {
 		return domain.ImageSourceStatus{}, fmt.Errorf("captcha service is not configured")
 	}
+	if a.service.imageSourceUseCase == nil {
+		return domain.ImageSourceStatus{}, domain.ErrImagePoolDisabled
+	}
 
-	status, err := a.service.UpdateImageSource(ctx, imageSourcePatchFromDomain(patch), triggerRefresh)
-	return imageSourceStatusToDomain(status), mapImageSourceError(err)
+	return a.service.imageSourceUseCase.Update(ctx, patch, triggerRefresh)
 }
 
 func (a *ImageSourceUseCaseAdapter) Refresh(ctx context.Context) (domain.ImageSourceStatus, error) {
 	if a == nil || a.service == nil {
 		return domain.ImageSourceStatus{}, fmt.Errorf("captcha service is not configured")
 	}
-
-	status, err := a.service.RefreshImagePool(ctx)
-	return imageSourceStatusToDomain(status), mapImageSourceError(err)
-}
-
-func imageSourcePatchFromDomain(patch domain.ImageSourcePatch) ImageSourcePatch {
-	return ImageSourcePatch{
-		URL:                patch.URL,
-		APIKey:             patch.APIKey,
-		TimeoutSeconds:     patch.TimeoutSeconds,
-		RateLimitPerMinute: patch.RateLimitPerMinute,
-		RetryCount:         patch.RetryCount,
-	}
-}
-
-func imageSourceStatusToDomain(status ImageSourceStatus) domain.ImageSourceStatus {
-	return domain.ImageSourceStatus{
-		Enabled:             status.Enabled,
-		Version:             status.Version,
-		Config:              imageSourceConfigViewToDomain(status.Config),
-		UpdatedAt:           status.UpdatedAt,
-		LastValidatedAt:     status.LastValidatedAt,
-		LastValidationError: status.LastValidationError,
-		LastRefreshedAt:     status.LastRefreshedAt,
-		LastRefreshError:    status.LastRefreshError,
-		PoolSize:            status.PoolSize,
-		PoolImageCount:      status.PoolImageCount,
-		ActiveGeneration:    status.ActiveGeneration,
-		GenerationCount:     status.GenerationCount,
-	}
-}
-
-func imageSourceValidationResultToDomain(result ImageSourceValidationResult) domain.ImageSourceValidationResult {
-	return domain.ImageSourceValidationResult{
-		Config:      imageSourceConfigViewToDomain(result.Config),
-		ValidatedAt: result.ValidatedAt,
-	}
-}
-
-func imageSourceConfigViewToDomain(config ImageSourceConfigView) domain.ImageSourceConfigView {
-	return domain.ImageSourceConfigView{
-		URL:                config.URL,
-		APIKeyConfigured:   config.APIKeyConfigured,
-		TimeoutSeconds:     config.TimeoutSeconds,
-		RateLimitPerMinute: config.RateLimitPerMinute,
-		RetryCount:         config.RetryCount,
-	}
-}
-
-func mapImageSourceError(err error) error {
-	if err == nil {
-		return nil
+	if a.service.imageSourceUseCase == nil {
+		return domain.ImageSourceStatus{}, domain.ErrImagePoolDisabled
 	}
 
-	if errors.Is(err, ErrImagePoolDisabled) {
-		return domain.ErrImagePoolDisabled
-	}
-	if errors.Is(err, ErrImagePoolRefreshInProgress) {
-		return domain.ErrImagePoolRefreshInProgress
-	}
-
-	var refreshErr *ImageSourceRefreshError
-	if errors.As(err, &refreshErr) {
-		return &domain.ImageSourceRefreshError{Err: refreshErr.Err}
-	}
-
-	var persistenceErr *ImageSourcePersistenceError
-	if errors.As(err, &persistenceErr) {
-		return &domain.ImageSourcePersistenceError{Err: persistenceErr.Err}
-	}
-
-	return err
+	return a.service.imageSourceUseCase.Refresh(ctx)
 }

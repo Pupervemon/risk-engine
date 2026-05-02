@@ -26,7 +26,7 @@ func (a *RuntimeImageSourceManagerPortAdapter) BuildCandidateConfig(patch domain
 		return domain.ImageSourceRuntimeConfig{}, fmt.Errorf("runtime image source manager is not configured")
 	}
 
-	cfg, err := a.manager.BuildCandidateConfig(imageSourcePatchFromDomain(patch))
+	cfg, err := a.manager.BuildCandidateConfig(patch)
 	if err != nil {
 		return domain.ImageSourceRuntimeConfig{}, err
 	}
@@ -42,7 +42,7 @@ func (a *RuntimeImageSourceManagerPortAdapter) ValidateConfig(ctx context.Contex
 	if err != nil {
 		return nil, err
 	}
-	return serviceImageProviderToAppAdapter{provider: provider}, nil
+	return provider, nil
 }
 
 func (a *RuntimeImageSourceManagerPortAdapter) ApplyConfig(candidate domain.ImageSourceRuntimeConfig, provider appports.ImageProvider) {
@@ -51,7 +51,7 @@ func (a *RuntimeImageSourceManagerPortAdapter) ApplyConfig(candidate domain.Imag
 	}
 	a.manager.ApplyConfig(
 		imageSourceRuntimeConfigFromDomain(candidate),
-		serviceImageProviderAdapter{provider: provider},
+		provider,
 	)
 }
 
@@ -65,7 +65,7 @@ func (a *RuntimeImageSourceManagerPortAdapter) ValidationResult(candidate domain
 	if a == nil || a.manager == nil {
 		return domain.ImageSourceValidationResult{}
 	}
-	return imageSourceValidationResultToDomain(a.manager.ValidationResult(imageSourceRuntimeConfigFromDomain(candidate)))
+	return a.manager.ValidationResult(imageSourceRuntimeConfigFromDomain(candidate))
 }
 
 func (a *RuntimeImageSourceManagerPortAdapter) Status(poolSize int, poolSnapshot domain.ImagePoolSnapshot) domain.ImageSourceStatus {
@@ -73,29 +73,7 @@ func (a *RuntimeImageSourceManagerPortAdapter) Status(poolSize int, poolSnapshot
 		return domain.ImageSourceStatus{Enabled: false}
 	}
 
-	return imageSourceStatusToDomain(a.manager.Status(poolSize, ImagePoolSnapshot{
-		ImageCount:       poolSnapshot.ImageCount,
-		ActiveGeneration: poolSnapshot.ActiveGeneration,
-		GenerationCount:  poolSnapshot.GenerationCount,
-	}))
-}
-
-type serviceImageProviderToAppAdapter struct {
-	provider ImageProvider
-}
-
-var _ appports.ImageProvider = serviceImageProviderToAppAdapter{}
-
-func (a serviceImageProviderToAppAdapter) FetchImages(ctx context.Context, count int) ([]domain.ImageMeta, error) {
-	if a.provider == nil {
-		return nil, fmt.Errorf("image provider is not configured")
-	}
-
-	images, err := a.provider.FetchImages(ctx, count)
-	if err != nil {
-		return nil, err
-	}
-	return imageMetasToDomain(images), nil
+	return a.manager.Status(poolSize, poolSnapshot)
 }
 
 func imageSourceRuntimeConfigToDomain(cfg ImageSourceRuntimeConfig) domain.ImageSourceRuntimeConfig {

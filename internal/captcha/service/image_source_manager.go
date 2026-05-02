@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Pupervemon/risk-engine/internal/captcha/domain"
 	sharedconfig "github.com/Pupervemon/risk-engine/internal/shared/config"
 	"go.uber.org/zap"
 )
@@ -200,7 +201,7 @@ func (m *RuntimeImageSourceManager) FetchImages(ctx context.Context, count int) 
 // - 只覆盖 patch 中真正传入的字段；
 // - 保留原来没有修改的字段；
 // - 统一做 trim 和合法性检查。
-func (m *RuntimeImageSourceManager) BuildCandidateConfig(patch ImageSourcePatch) (ImageSourceRuntimeConfig, error) {
+func (m *RuntimeImageSourceManager) BuildCandidateConfig(patch domain.ImageSourcePatch) (ImageSourceRuntimeConfig, error) {
 	// 先读出当前配置作为基线，再在其上应用 patch。
 	m.mu.RLock()
 	candidate := m.config
@@ -310,12 +311,12 @@ func (m *RuntimeImageSourceManager) RecordRefreshResult(err error) {
 // ValidationResult 返回候选配置的对外校验结果视图。
 //
 // 它会把内部记录的最后一次校验时间带上，但不会暴露敏感字段。
-func (m *RuntimeImageSourceManager) ValidationResult(candidate ImageSourceRuntimeConfig) ImageSourceValidationResult {
+func (m *RuntimeImageSourceManager) ValidationResult(candidate ImageSourceRuntimeConfig) domain.ImageSourceValidationResult {
 	// 只读状态，使用读锁即可。
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	return ImageSourceValidationResult{
+	return domain.ImageSourceValidationResult{
 		Config:      candidate.publicView(),
 		ValidatedAt: formatOptionalTime(m.lastValidatedAt),
 	}
@@ -325,12 +326,12 @@ func (m *RuntimeImageSourceManager) ValidationResult(candidate ImageSourceRuntim
 //
 // 该快照给管理接口使用，能够看到当前配置、版本、最近一次校验/刷新情况，
 // 以及图片池规模等信息。
-func (m *RuntimeImageSourceManager) Status(poolSize int, poolSnapshot ImagePoolSnapshot) ImageSourceStatus {
+func (m *RuntimeImageSourceManager) Status(poolSize int, poolSnapshot domain.ImagePoolSnapshot) domain.ImageSourceStatus {
 	// 状态读取走读锁，允许多个请求并发查看。
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	return ImageSourceStatus{
+	return domain.ImageSourceStatus{
 		Enabled:             true,
 		Version:             m.version,
 		Config:              m.config.publicView(),
@@ -437,8 +438,8 @@ func (cfg ImageSourceRuntimeConfig) fetcherConfig() ExternalImageAPIConfig {
 // publicView 返回对外可展示的安全视图。
 //
 // 这里故意不把 APIKey 原文暴露出去，只返回一个布尔值表示是否配置过。
-func (cfg ImageSourceRuntimeConfig) publicView() ImageSourceConfigView {
-	return ImageSourceConfigView{
+func (cfg ImageSourceRuntimeConfig) publicView() domain.ImageSourceConfigView {
+	return domain.ImageSourceConfigView{
 		URL:                cfg.URL,
 		APIKeyConfigured:   cfg.APIKey != "",
 		TimeoutSeconds:     cfg.TimeoutSeconds,

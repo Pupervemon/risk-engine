@@ -5,43 +5,6 @@ import (
 	"time"
 )
 
-func TestShouldRefreshImagePoolOnStartup(t *testing.T) {
-	t.Parallel()
-
-	testCases := []struct {
-		name          string
-		existingCount int64
-		want          bool
-	}{
-		{
-			name:          "empty pool refreshes on startup",
-			existingCount: 0,
-			want:          true,
-		},
-		{
-			name:          "non-empty pool skips startup refresh",
-			existingCount: 1,
-			want:          false,
-		},
-		{
-			name:          "larger pool skips startup refresh",
-			existingCount: 100,
-			want:          false,
-		},
-	}
-
-	for _, tc := range testCases {
-		tc := tc
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-
-			if got := shouldRefreshImagePoolOnStartup(tc.existingCount); got != tc.want {
-				t.Fatalf("shouldRefreshImagePoolOnStartup(%d) = %v, want %v", tc.existingCount, got, tc.want)
-			}
-		})
-	}
-}
-
 func TestNextMidnightRefreshTime(t *testing.T) {
 	t.Parallel()
 
