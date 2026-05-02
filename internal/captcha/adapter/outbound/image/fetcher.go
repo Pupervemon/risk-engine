@@ -1,4 +1,4 @@
-package service
+package imageadapter
 
 import (
 	"bytes"
@@ -21,6 +21,8 @@ import (
 	"strings"
 	"time"
 
+	appports "github.com/Pupervemon/risk-engine/internal/captcha/application/ports"
+	"github.com/Pupervemon/risk-engine/internal/captcha/domain"
 	"github.com/google/uuid"
 	"go.uber.org/zap"
 	xdraw "golang.org/x/image/draw"
@@ -127,16 +129,18 @@ func NewExternalImageFetcher(config ExternalImageAPIConfig, logger *zap.Logger, 
 
 // FetchImages 实现 ImageProvider 接口。
 // 这个方法会按 count 次数连续尝试拉取图片，并受限于限流器和上下文取消信号。
-func (f *ExternalImageFetcher) FetchImages(ctx context.Context, count int) ([]ImageMeta, error) {
+var _ appports.ImageProvider = (*ExternalImageFetcher)(nil)
+
+func (f *ExternalImageFetcher) FetchImages(ctx context.Context, count int) ([]domain.ImageMeta, error) {
 	if count <= 0 {
-		return []ImageMeta{}, nil
+		return []domain.ImageMeta{}, nil
 	}
 
 	f.logger.Info("fetching captcha background images from external API",
 		zap.Int("count", count),
 		zap.String("api_url", f.config.URL))
 
-	images := make([]ImageMeta, 0, count)
+	images := make([]domain.ImageMeta, 0, count)
 	successCount := 0
 	failCount := 0
 
@@ -171,7 +175,7 @@ func (f *ExternalImageFetcher) FetchImages(ctx context.Context, count int) ([]Im
 
 // fetchSingleImageWithRetry 负责单张图片的重试逻辑。
 // 退避策略采用平方秒级别增长，既简单又能在上游不稳定时降低重试压力。
-func (f *ExternalImageFetcher) fetchSingleImageWithRetry(ctx context.Context) (ImageMeta, error) {
+func (f *ExternalImageFetcher) fetchSingleImageWithRetry(ctx context.Context) (domain.ImageMeta, error) {
 	retryCount := f.config.RetryCount
 	if retryCount < 0 {
 		retryCount = 0
@@ -191,7 +195,7 @@ func (f *ExternalImageFetcher) fetchSingleImageWithRetry(ctx context.Context) (I
 			case <-timer.C:
 			case <-ctx.Done():
 				timer.Stop()
-				return ImageMeta{}, ctx.Err()
+				return domain.ImageMeta{}, ctx.Err()
 			}
 		}
 
@@ -202,26 +206,26 @@ func (f *ExternalImageFetcher) fetchSingleImageWithRetry(ctx context.Context) (I
 		lastErr = err
 	}
 
-	return ImageMeta{}, fmt.Errorf("failed after %d retries: %w", retryCount, lastErr)
+	return domain.ImageMeta{}, fmt.Errorf("failed after %d retries: %w", retryCount, lastErr)
 }
 
 // fetchSingleImage 执行一次完整的图片获取和规范化流程。
 // 它只关心“成功拿到一张可用图片”，不负责重试和批量控制。
-func (f *ExternalImageFetcher) fetchSingleImage(ctx context.Context) (ImageMeta, error) {
+func (f *ExternalImageFetcher) fetchSingleImage(ctx context.Context) (domain.ImageMeta, error) {
 	payload, err := f.fetchUpstreamPayload(ctx)
 	if err != nil {
-		return ImageMeta{}, err
+		return domain.ImageMeta{}, err
 	}
 
 	processedData, err := f.processImage(payload.ImageData)
 	if err != nil {
-		return ImageMeta{}, fmt.Errorf("process image failed: %w", err)
+		return domain.ImageMeta{}, fmt.Errorf("process image failed: %w", err)
 	}
 
 	hash := sha256.Sum256(processedData)
 	imageID := fmt.Sprintf("%x", hash[:16])
 
-	return ImageMeta{
+	return domain.ImageMeta{
 		ID:   imageID,
 		Data: processedData,
 		URL:  payload.SourceURL,
@@ -892,10 +896,12 @@ func NewMockImageFetcher(logger *zap.Logger, targetWidth, targetHeight int) *Moc
 
 // FetchImages 实现 mock 版本的图片提供逻辑。
 // 这里直接生成指定尺寸的纯色图片，用于测试和降级场景。
-func (m *MockImageFetcher) FetchImages(ctx context.Context, count int) ([]ImageMeta, error) {
+var _ appports.ImageProvider = (*MockImageFetcher)(nil)
+
+func (m *MockImageFetcher) FetchImages(ctx context.Context, count int) ([]domain.ImageMeta, error) {
 	m.logger.Warn("using mock captcha image fetcher", zap.Int("count", count))
 
-	images := make([]ImageMeta, 0, count)
+	images := make([]domain.ImageMeta, 0, count)
 
 	// 预设几种浅色背景，避免生成的图片过于单一，也方便人工识别。
 	colors := []struct {
@@ -935,7 +941,7 @@ func (m *MockImageFetcher) FetchImages(ctx context.Context, count int) ([]ImageM
 		}
 
 		imageID := fmt.Sprintf("mock-%s-%s", bgColor.name, uuid.New().String()[:8])
-		images = append(images, ImageMeta{
+		images = append(images, domain.ImageMeta{
 			ID:   imageID,
 			Data: buf.Bytes(),
 			URL:  fmt.Sprintf("mock://%s", bgColor.name),
@@ -947,7 +953,7 @@ func (m *MockImageFetcher) FetchImages(ctx context.Context, count int) ([]ImageM
 
 // CustomImageFetcher 根据配置返回实际的外部抓取器，或者在未配置时返回 mock 实现。
 // 这是业务层最常用的入口，调用方无需关心具体实现细节。
-func CustomImageFetcher(apiConfig ExternalImageAPIConfig, logger *zap.Logger, width, height int) ImageProvider {
+func CustomImageFetcher(apiConfig ExternalImageAPIConfig, logger *zap.Logger, width, height int) appports.ImageProvider {
 	if apiConfig.URL == "" {
 		if logger == nil {
 			logger = zap.NewNop()

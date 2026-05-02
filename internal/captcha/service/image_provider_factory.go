@@ -1,6 +1,11 @@
 package service
 
-import "go.uber.org/zap"
+import (
+	imageadapter "github.com/Pupervemon/risk-engine/internal/captcha/adapter/outbound/image"
+	"go.uber.org/zap"
+)
+
+type ExternalImageAPIConfig = imageadapter.ExternalImageAPIConfig
 
 // RuntimeImageProviderFactory builds providers for runtime image-source config.
 type RuntimeImageProviderFactory interface {
@@ -34,9 +39,13 @@ func (f *ExternalImageProviderFactory) BuildRuntimeProvider(cfg ImageSourceRunti
 		return nil, err
 	}
 
-	return NewExternalImageFetcher(cfg.fetcherConfig(), f.logger, f.width, f.height), nil
+	return serviceImageProviderAdapter{
+		provider: imageadapter.NewExternalImageFetcher(cfg.fetcherConfig(), f.logger, f.width, f.height),
+	}, nil
 }
 
 func (f *ExternalImageProviderFactory) BuildImagePoolProvider(cfg ExternalImageAPIConfig) ImageProvider {
-	return CustomImageFetcher(cfg, f.logger, f.width, f.height)
+	return serviceImageProviderAdapter{
+		provider: imageadapter.CustomImageFetcher(cfg, f.logger, f.width, f.height),
+	}
 }
