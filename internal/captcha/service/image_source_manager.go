@@ -75,17 +75,6 @@ type ImageSourcePatch struct {
 	RetryCount         *int
 }
 
-// ImageSourceRuntimeConfig 是运行时实际生效的图片源配置。
-//
-// 它是可变配置的内部表示，manager 会把这份配置交给当前活跃的 ImageProvider 使用。
-type ImageSourceRuntimeConfig struct {
-	URL                string
-	APIKey             string
-	TimeoutSeconds     int
-	RateLimitPerMinute int
-	RetryCount         int
-}
-
 // ImageSourceConfigView 是运行时配置对外展示的安全视图。
 //
 // 这里不会直接暴露 APIKey 明文，只会告诉调用方它是否已配置，避免敏感信息泄露。
@@ -135,7 +124,7 @@ type RuntimeImageSourceManager struct {
 	providerFactory RuntimeImageProviderFactory
 
 	mu                  sync.RWMutex
-	config              ImageSourceRuntimeConfig
+	config              domain.ImageSourceRuntimeConfig
 	provider            ImageProvider
 	version             int64
 	updatedAt           time.Time
@@ -149,7 +138,7 @@ type RuntimeImageSourceManager struct {
 //
 // 初始化时会先规范化并校验输入配置，再基于配置构造初始 provider，
 // 这样 manager 一创建出来就已经可以直接服务请求。
-func NewRuntimeImageSourceManager(initial ImageSourceRuntimeConfig, logger *zap.Logger, width, height int, providerFactory RuntimeImageProviderFactory) (*RuntimeImageSourceManager, error) {
+func NewRuntimeImageSourceManager(initial domain.ImageSourceRuntimeConfig, logger *zap.Logger, width, height int, providerFactory RuntimeImageProviderFactory) (*RuntimeImageSourceManager, error) {
 	// 允许调用方不传 logger，避免后续日志调用空指针。
 	if logger == nil {
 		logger = zap.NewNop()
@@ -201,7 +190,7 @@ func (m *RuntimeImageSourceManager) FetchImages(ctx context.Context, count int) 
 // - 只覆盖 patch 中真正传入的字段；
 // - 保留原来没有修改的字段；
 // - 统一做 trim 和合法性检查。
-func (m *RuntimeImageSourceManager) BuildCandidateConfig(patch domain.ImageSourcePatch) (ImageSourceRuntimeConfig, error) {
+func (m *RuntimeImageSourceManager) BuildCandidateConfig(patch domain.ImageSourcePatch) (domain.ImageSourceRuntimeConfig, error) {
 	// 先读出当前配置作为基线，再在其上应用 patch。
 	m.mu.RLock()
 	candidate := m.config
@@ -227,7 +216,7 @@ func (m *RuntimeImageSourceManager) BuildCandidateConfig(patch domain.ImageSourc
 	// 合并完后再统一做清理和校验。
 	candidate = normalizeImageSourceRuntimeConfig(candidate)
 	if err := validateImageSourceRuntimeConfig(candidate); err != nil {
-		return ImageSourceRuntimeConfig{}, err
+		return domain.ImageSourceRuntimeConfig{}, err
 	}
 
 	return candidate, nil
@@ -237,7 +226,7 @@ func (m *RuntimeImageSourceManager) BuildCandidateConfig(patch domain.ImageSourc
 //
 // 这里不只是做参数合法性检查，还会构造 provider 并尝试拉取 1 张图片，
 // 用来确认这份配置不仅“看起来正确”，而且“实际可用”。
-func (m *RuntimeImageSourceManager) ValidateConfig(ctx context.Context, candidate ImageSourceRuntimeConfig) (ImageProvider, error) {
+func (m *RuntimeImageSourceManager) ValidateConfig(ctx context.Context, candidate domain.ImageSourceRuntimeConfig) (ImageProvider, error) {
 	// 先尝试基于候选配置构造 provider。
 	provider, err := m.buildRuntimeProvider(candidate)
 	if err == nil {
@@ -261,7 +250,7 @@ func (m *RuntimeImageSourceManager) ValidateConfig(ctx context.Context, candidat
 //
 // 这个方法假设传入的 candidate 和 provider 都已经过校验，因此它只负责写入状态，
 // 不再重复做验证逻辑。
-func (m *RuntimeImageSourceManager) ApplyConfig(candidate ImageSourceRuntimeConfig, provider ImageProvider) {
+func (m *RuntimeImageSourceManager) ApplyConfig(candidate domain.ImageSourceRuntimeConfig, provider ImageProvider) {
 	// 写操作需要独占锁，避免和 FetchImages / Status / Validation 并发读写冲突。
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -278,7 +267,7 @@ func (m *RuntimeImageSourceManager) ApplyConfig(candidate ImageSourceRuntimeConf
 //
 // 这个方法用于服务启动或重建 manager 时，从 Redis 之类的持久化存储里恢复上一次的配置。
 // 因为恢复不是一次“新的在线修改”，所以版本号保持不变更合理。
-func (m *RuntimeImageSourceManager) RestoreConfig(candidate ImageSourceRuntimeConfig, provider ImageProvider) {
+func (m *RuntimeImageSourceManager) RestoreConfig(candidate domain.ImageSourceRuntimeConfig, provider ImageProvider) {
 	// 同样使用独占锁，保证恢复过程对外是原子的。
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -311,13 +300,13 @@ func (m *RuntimeImageSourceManager) RecordRefreshResult(err error) {
 // ValidationResult 返回候选配置的对外校验结果视图。
 //
 // 它会把内部记录的最后一次校验时间带上，但不会暴露敏感字段。
-func (m *RuntimeImageSourceManager) ValidationResult(candidate ImageSourceRuntimeConfig) domain.ImageSourceValidationResult {
+func (m *RuntimeImageSourceManager) ValidationResult(candidate domain.ImageSourceRuntimeConfig) domain.ImageSourceValidationResult {
 	// 只读状态，使用读锁即可。
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
 	return domain.ImageSourceValidationResult{
-		Config:      candidate.publicView(),
+		Config:      imageSourceConfigPublicView(candidate),
 		ValidatedAt: formatOptionalTime(m.lastValidatedAt),
 	}
 }
@@ -334,7 +323,7 @@ func (m *RuntimeImageSourceManager) Status(poolSize int, poolSnapshot domain.Ima
 	return domain.ImageSourceStatus{
 		Enabled:             true,
 		Version:             m.version,
-		Config:              m.config.publicView(),
+		Config:              imageSourceConfigPublicView(m.config),
 		UpdatedAt:           formatOptionalTime(m.updatedAt),
 		LastValidatedAt:     formatOptionalTime(m.lastValidatedAt),
 		LastValidationError: m.lastValidationError,
@@ -357,7 +346,7 @@ func (m *RuntimeImageSourceManager) activeProvider() ImageProvider {
 	return m.provider
 }
 
-func (m *RuntimeImageSourceManager) buildRuntimeProvider(cfg ImageSourceRuntimeConfig) (ImageProvider, error) {
+func (m *RuntimeImageSourceManager) buildRuntimeProvider(cfg domain.ImageSourceRuntimeConfig) (ImageProvider, error) {
 	if m == nil || m.providerFactory == nil {
 		return nil, fmt.Errorf("image provider factory is not configured")
 	}
@@ -385,7 +374,7 @@ func (m *RuntimeImageSourceManager) recordValidationResult(err error) {
 // normalizeImageSourceRuntimeConfig 对运行时配置做轻量级清理。
 //
 // 目前只去掉 URL 和 APIKey 两侧空白，避免用户在输入时带入多余换行或空格。
-func normalizeImageSourceRuntimeConfig(cfg ImageSourceRuntimeConfig) ImageSourceRuntimeConfig {
+func normalizeImageSourceRuntimeConfig(cfg domain.ImageSourceRuntimeConfig) domain.ImageSourceRuntimeConfig {
 	cfg.URL = strings.TrimSpace(cfg.URL)
 	cfg.APIKey = strings.TrimSpace(cfg.APIKey)
 	return cfg
@@ -398,7 +387,7 @@ func normalizeImageSourceRuntimeConfig(cfg ImageSourceRuntimeConfig) ImageSource
 // - 超时时间必须大于 0；
 // - 限流必须大于 0；
 // - 重试次数不能为负数。
-func validateImageSourceRuntimeConfig(cfg ImageSourceRuntimeConfig) error {
+func validateImageSourceRuntimeConfig(cfg domain.ImageSourceRuntimeConfig) error {
 	if cfg.URL == "" {
 		return fmt.Errorf("image source url is required")
 	}
@@ -425,7 +414,7 @@ func validateImageSourceRuntimeConfig(cfg ImageSourceRuntimeConfig) error {
 //
 // 这个转换层把“服务内部的运行时表示”与“真正调用外部图片源的配置格式”隔离开，
 // 便于以后扩展或调整内部结构。
-func (cfg ImageSourceRuntimeConfig) fetcherConfig() ExternalImageAPIConfig {
+func imageSourceFetcherConfig(cfg domain.ImageSourceRuntimeConfig) ExternalImageAPIConfig {
 	return ExternalImageAPIConfig{
 		URL:                cfg.URL,
 		APIKey:             cfg.APIKey,
@@ -438,7 +427,7 @@ func (cfg ImageSourceRuntimeConfig) fetcherConfig() ExternalImageAPIConfig {
 // publicView 返回对外可展示的安全视图。
 //
 // 这里故意不把 APIKey 原文暴露出去，只返回一个布尔值表示是否配置过。
-func (cfg ImageSourceRuntimeConfig) publicView() domain.ImageSourceConfigView {
+func imageSourceConfigPublicView(cfg domain.ImageSourceRuntimeConfig) domain.ImageSourceConfigView {
 	return domain.ImageSourceConfigView{
 		URL:                cfg.URL,
 		APIKeyConfigured:   cfg.APIKey != "",
@@ -451,8 +440,8 @@ func (cfg ImageSourceRuntimeConfig) publicView() domain.ImageSourceConfigView {
 // imageSourceRuntimeConfigFromShared 将共享配置结构转换成运行时配置结构。
 //
 // 这样可以把 shared/config 层的配置直接喂给 runtime manager，避免在上层做重复映射。
-func imageSourceRuntimeConfigFromShared(cfg sharedconfig.ExternalImageAPIConfig) ImageSourceRuntimeConfig {
-	return ImageSourceRuntimeConfig{
+func imageSourceRuntimeConfigFromShared(cfg sharedconfig.ExternalImageAPIConfig) domain.ImageSourceRuntimeConfig {
+	return domain.ImageSourceRuntimeConfig{
 		URL:                cfg.URL,
 		APIKey:             cfg.APIKey,
 		TimeoutSeconds:     cfg.TimeoutSeconds,

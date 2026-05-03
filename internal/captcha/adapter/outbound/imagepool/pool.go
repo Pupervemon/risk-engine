@@ -2,7 +2,6 @@ package imagepool
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -21,7 +20,7 @@ const (
 	imagePoolGenerationsToKeep         = 3
 )
 
-var ErrImagePoolRefreshInProgress = errors.New("captcha image pool refresh is already in progress")
+var ErrImagePoolRefreshInProgress = domain.ErrImagePoolRefreshInProgress
 
 type ImageMeta = domain.ImageMeta
 

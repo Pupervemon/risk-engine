@@ -141,6 +141,11 @@ internal/captcha/
         external_fetcher.go
         mock_fetcher.go
         normalizer.go
+      imagepool/
+        pool.go
+        refresher.go
+        scheduler.go
+        port_adapter.go
       health/
         checker.go
 
@@ -155,6 +160,7 @@ internal/captcha/
 - `application` 保存用例编排和端口定义。
 - `adapter/inbound` 保存 HTTP/gRPC 入口。
 - `adapter/outbound` 保存 Redis、外部 API、第三方验证码库等实现。
+- `adapter/outbound/imagepool` 固定作为图片池运行适配器，负责组合图片池 repository、刷新器、调度器和 `BackgroundImagePool` 端口适配器；Redis key 与 generation 读写仍由 `adapter/outbound/redis` 封装。
 - `bootstrap` 可选，用于把 `shared/config` 转成应用层配置并集中组装依赖。也可以先放在 `cmd/captcha-server/main.go`，等结构稳定后再抽出。
 
 ## 5. 端口设计
@@ -335,7 +341,13 @@ type RuntimeImageSourceStore interface {
 - `BackgroundImagePool`
 - `Clock`
 
-当前 `RuntimeImageSourceManager` 的状态机可以保留，但应移入 application 或 domain，且它不能直接构建 `ExternalImageFetcher`。构建 provider 的动作应通过 `ImageProviderFactory` 端口完成。
+固定决策：
+
+- `RuntimeImageSourceManager` 放入 `application`，不放入 `domain`。原因是它负责运行时状态、候选配置校验结果、刷新结果时间戳以及 provider 切换编排，属于应用状态机，不是纯领域值对象。
+- `RuntimeImageSourceManager` 直接使用 `domain.ImageSourceRuntimeConfig`、`domain.ImageSourcePatch`、`domain.ImageSourceStatus` 等领域模型，不再保留 service 内部重复 DTO。
+- `ImageProviderFactory` 定义为 application 出站端口。`RuntimeImageSourceManager` 只能依赖该端口，不能直接构建 `ExternalImageFetcher`。
+- `ExternalImageProviderFactory` 放入 `adapter/outbound/image`，实现 `ImageProviderFactory`，负责把运行时图片源配置转换成具体 `ImageProvider`。
+- `service` 包只保留旧调用方兼容 facade 和必要 DTO 映射，不再承载 runtime image-source 新业务状态。
 
 ### 7.4 Lifecycle 用例
 
@@ -554,10 +566,13 @@ application.NewCaptchaUseCase(options, ports...)
 
 1. 把图片池 Redis 存储、generation、分布式锁封装进 outbound Redis adapter。
 2. 把外部图片 fetcher 移动到 outbound image adapter。
-3. 为 `RuntimeImageSourceManager` 注入 `ImageProviderFactory`，移除直接构造 `ExternalImageFetcher`。
-4. 移除 `captchaRuntimeImageSourceBindings sync.Map`，改为组合根显式持有 manager/store/pool。
-5. 将 `ImageSourceUseCase` 作为应用层入口，HTTP admin handler 只依赖该接口。
-6. 将图片池启停放入 lifecycle。
+3. 将 `RuntimeImageSourceManager` 移入 `application`，并让它直接使用 domain 的 image-source 模型。
+4. 为 `RuntimeImageSourceManager` 注入 `ImageProviderFactory`，移除直接构造 `ExternalImageFetcher`。
+5. 将 `ExternalImageProviderFactory` 移入 `adapter/outbound/image`，作为 `ImageProviderFactory` 的具体实现。
+6. 保留 `adapter/outbound/imagepool` 作为图片池运行适配器，封装刷新器、调度器和 application 端口适配器。
+7. 移除 `captchaRuntimeImageSourceBindings sync.Map`，改为组合根显式持有 manager/store/pool。
+8. 将 `ImageSourceUseCase` 作为应用层入口，HTTP admin handler 只依赖该接口。
+9. 将图片池启停放入 lifecycle。
 
 验收：
 
@@ -574,7 +589,8 @@ application.NewCaptchaUseCase(options, ports...)
 1. 新增 `bootstrap/wiring.go` 或在 `cmd/captcha-server/main.go` 中集中 wiring。
 2. 将配置映射逻辑收敛到 `bootstrap/config_mapper.go`。
 3. 确认 `cmd/captcha-server/main.go` 不直接引用 application 内部实现细节之外的对象。
-4. 清理旧 service 包或保留薄兼容层。
+4. 将 `internal/captcha/transport/http` 移动到 `internal/captcha/adapter/inbound/http`。该动作属于包路径整理，放在核心依赖方向稳定之后执行。
+5. 清理旧 service 包或保留薄兼容层；保留时只能做旧 API facade、DTO 映射和兼容错误映射，不能继续新增业务状态或组装职责。
 
 验收：
 
@@ -679,8 +695,9 @@ HTTP/gRPC 对外依赖 reason 字符串。重构时应先建立错误映射表�
 2. 抽入站接口，让 HTTP/gRPC 先面向用例。
 3. 拆 token，因为最独立、最容易验证。
 4. 拆 captcha 生成校验。
-5. 拆图片池和运行时图片源。
-6. 最后整理目录和启动 wiring。
+5. 拆图片池和运行时图片源；先固定 `RuntimeImageSourceManager -> application`、`ImageProviderFactory -> application outbound port`、`ExternalImageProviderFactory -> adapter/outbound/image`。
+6. 收敛启动组装到 `cmd/captcha-server` 或 `bootstrap`，逐步削薄 `service`。
+7. 最后做纯包路径整理，例如将 `transport/http` 移到 `adapter/inbound/http`。
 
 这套顺序能最大限度减少一次性改动范围，也便于每一步都保持服务可运行。
 

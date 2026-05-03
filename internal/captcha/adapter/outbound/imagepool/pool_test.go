@@ -2,6 +2,7 @@ package imagepool
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -86,6 +87,26 @@ func TestRedisImagePoolRefreshWithProviderUsesLockAndProvider(t *testing.T) {
 	}
 }
 
+func TestRedisImagePoolRefreshInProgressUsesDomainError(t *testing.T) {
+	t.Parallel()
+
+	repository := &busyImagePoolRepository{}
+	pool := newRedisImagePool(repository, nil, nil, 1)
+	provider := &fakeImageProvider{
+		images: []domain.ImageMeta{
+			{ID: "img-1", Data: []byte("image-1"), URL: "https://example.test/img-1.jpg"},
+		},
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond)
+	defer cancel()
+
+	err := pool.RefreshWithProvider(ctx, provider)
+	if !errors.Is(err, domain.ErrImagePoolRefreshInProgress) {
+		t.Fatalf("RefreshWithProvider() error = %v, want domain refresh-in-progress error", err)
+	}
+}
+
 type fakeImagePoolRepository struct {
 	loadCalls        int
 	cleanupCalls     int
@@ -127,6 +148,15 @@ func (r *fakeImagePoolRepository) AcquireRefreshLock(context.Context, string, ti
 func (r *fakeImagePoolRepository) ReleaseRefreshLock(context.Context, string) error {
 	r.releaseLockCalls++
 	return nil
+}
+
+type busyImagePoolRepository struct {
+	fakeImagePoolRepository
+}
+
+func (r *busyImagePoolRepository) AcquireRefreshLock(context.Context, string, time.Duration) (bool, error) {
+	r.acquireLockCalls++
+	return false, nil
 }
 
 type fakeImageProvider struct {

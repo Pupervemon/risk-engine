@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	captchaadapter "github.com/Pupervemon/risk-engine/internal/captcha/adapter/outbound/captcha"
+	imagepooladapter "github.com/Pupervemon/risk-engine/internal/captcha/adapter/outbound/imagepool"
 	redisadapter "github.com/Pupervemon/risk-engine/internal/captcha/adapter/outbound/redis"
 	captchaapp "github.com/Pupervemon/risk-engine/internal/captcha/application"
 	appports "github.com/Pupervemon/risk-engine/internal/captcha/application/ports"
@@ -19,7 +20,7 @@ type CaptchaService struct {
 	rdb                *redis.Client
 	cfg                *config.CaptchaConfigSpec
 	logger             *zap.Logger
-	imagePool          *RedisImagePool
+	imagePool          *imagepooladapter.RedisImagePool
 	useImagePool       bool
 	captchaUseCase     appports.CaptchaUseCase
 	lifecycle          appports.CaptchaLifecycle
@@ -64,7 +65,7 @@ func NewCaptchaService(rdb *redis.Client, cfg *config.CaptchaConfigSpec, logger 
 
 	var imagePool appports.BackgroundImagePool
 	if service.imagePool != nil {
-		imagePool = NewImagePoolPortAdapter(service.imagePool)
+		imagePool = imagepooladapter.NewPortAdapter(service.imagePool)
 	}
 
 	service.captchaUseCase = captchaapp.NewCaptchaUseCase(

@@ -1,20 +1,20 @@
 package domain
 
-// ImageMeta contains normalized image data used by the captcha image pool.
+// ImageMeta 包含验证码图片池使用的标准化图片数据。
 type ImageMeta struct {
 	ID   string
 	Data []byte
 	URL  string
 }
 
-// ImagePoolSnapshot describes the active image-pool generation.
+// ImagePoolSnapshot 描述当前活跃的图片池代次。
 type ImagePoolSnapshot struct {
 	ImageCount       int64
 	ActiveGeneration string
 	GenerationCount  int64
 }
 
-// ImageSourcePatch represents a partial runtime image source update.
+// ImageSourcePatch 表示运行时图片源的部分更新。
 type ImageSourcePatch struct {
 	URL                *string
 	APIKey             *string
@@ -23,7 +23,7 @@ type ImageSourcePatch struct {
 	RetryCount         *int
 }
 
-// ImageSourceRuntimeConfig is the effective runtime image source config.
+// ImageSourceRuntimeConfig 是生效中的运行时图片源配置。
 type ImageSourceRuntimeConfig struct {
 	URL                string
 	APIKey             string
@@ -32,7 +32,7 @@ type ImageSourceRuntimeConfig struct {
 	RetryCount         int
 }
 
-// ImageSourceConfigView is a safe external view of an image source config.
+// ImageSourceConfigView 是图片源配置的安全对外视图。
 type ImageSourceConfigView struct {
 	URL                string
 	APIKeyConfigured   bool
@@ -41,7 +41,7 @@ type ImageSourceConfigView struct {
 	RetryCount         int
 }
 
-// ImageSourceStatus is the application snapshot used by image-source admin APIs.
+// ImageSourceStatus 是图片源管理接口使用的应用快照。
 type ImageSourceStatus struct {
 	Enabled             bool
 	Version             int64
@@ -57,7 +57,7 @@ type ImageSourceStatus struct {
 	GenerationCount     int64
 }
 
-// ImageSourceValidationResult is returned by image-source validation.
+// ImageSourceValidationResult 是图片源校验的返回结果。
 type ImageSourceValidationResult struct {
 	Config      ImageSourceConfigView
 	ValidatedAt string

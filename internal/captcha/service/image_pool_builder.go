@@ -1,12 +1,13 @@
 package service
 
 import (
+	imagepooladapter "github.com/Pupervemon/risk-engine/internal/captcha/adapter/outbound/imagepool"
 	"github.com/Pupervemon/risk-engine/internal/shared/config"
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 )
 
-func newConfiguredImagePool(rdb *redis.Client, cfg *config.CaptchaConfigSpec, logger *zap.Logger) *RedisImagePool {
+func newConfiguredImagePool(rdb *redis.Client, cfg *config.CaptchaConfigSpec, logger *zap.Logger) *imagepooladapter.RedisImagePool {
 	if cfg == nil || !cfg.ImagePool.Enabled {
 		return nil
 	}
@@ -28,7 +29,7 @@ func newConfiguredImagePool(rdb *redis.Client, cfg *config.CaptchaConfigSpec, lo
 	height := normalizedHeight(cfg.Height)
 	providerFactory := NewExternalImageProviderFactory(logger, width, height)
 	provider := providerFactory.BuildImagePoolProvider(apiConfig)
-	imagePool := NewRedisImagePool(rdb, logger, provider, poolSize)
+	imagePool := imagepooladapter.NewRedisImagePool(rdb, logger, provider, poolSize)
 
 	if logger != nil {
 		logger.Info("图片池已初始化",

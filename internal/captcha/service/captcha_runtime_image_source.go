@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	imagepooladapter "github.com/Pupervemon/risk-engine/internal/captcha/adapter/outbound/imagepool"
 	redisadapter "github.com/Pupervemon/risk-engine/internal/captcha/adapter/outbound/redis"
 	captchaapp "github.com/Pupervemon/risk-engine/internal/captcha/application"
 	appports "github.com/Pupervemon/risk-engine/internal/captcha/application/ports"
@@ -87,7 +88,7 @@ func (s *CaptchaService) EnableRuntimeImageSourceManager() error {
 	s.imageSourceBinding = binding
 	s.imageSourceUseCase = captchaapp.NewImageSourceUseCase(
 		NewRuntimeImageSourceManagerPortAdapter(manager),
-		NewImagePoolPortAdapter(s.imagePool),
+		imagepooladapter.NewPortAdapter(s.imagePool),
 		binding.store,
 		captchaapp.ImageSourceOptions{PoolSize: s.imagePool.PoolSize()},
 	)
@@ -124,7 +125,7 @@ func (s *CaptchaService) restoreRuntimeImageSource(binding *runtimeImageSourceBi
 	if !found {
 		return
 	}
-	cfg := imageSourceRuntimeConfigFromDomain(persisted)
+	cfg := persisted
 
 	// 将持久化配置转换成可运行的 provider。
 	// 如果配置已失效或字段非法，这里会返回错误。
