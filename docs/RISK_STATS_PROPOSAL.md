@@ -369,7 +369,7 @@ stats:{service}:{granularity}:{bucket}:top:{dimension}
 建议位置：
 
 - `internal/risk/transport/router.go`
-- `internal/captcha/transport/http/router.go`
+- `internal/captcha/adapter/inbound/http/router.go`
 - `cmd/risk-server/main.go` 中的 gRPC Unary Interceptor
 - `cmd/captcha-server/main.go` 中的 gRPC Unary Interceptor
 

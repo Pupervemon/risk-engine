@@ -14,7 +14,7 @@ type PortAdapter struct {
 	pool *RedisImagePool
 }
 
-var _ appports.BackgroundImagePool = (*PortAdapter)(nil)
+var _ appports.ManagedBackgroundImagePool = (*PortAdapter)(nil)
 
 func NewPortAdapter(pool *RedisImagePool) *PortAdapter {
 	if pool == nil {
@@ -42,6 +42,13 @@ func (a *PortAdapter) Snapshot(ctx context.Context) (domain.ImagePoolSnapshot, e
 	return snapshot, nil
 }
 
+func (a *PortAdapter) Count(ctx context.Context) (int64, error) {
+	if a == nil || a.pool == nil {
+		return 0, fmt.Errorf("captcha image pool is not configured")
+	}
+	return a.pool.Count(ctx)
+}
+
 func (a *PortAdapter) Refresh(ctx context.Context) error {
 	if a == nil || a.pool == nil {
 		return fmt.Errorf("captcha image pool is not configured")
@@ -66,4 +73,17 @@ func (a *PortAdapter) Stop() {
 	if a != nil && a.pool != nil {
 		a.pool.StopRefresh()
 	}
+}
+
+func (a *PortAdapter) SetProvider(provider appports.ImageProvider) {
+	if a != nil && a.pool != nil {
+		a.pool.SetProvider(provider)
+	}
+}
+
+func (a *PortAdapter) PoolSize() int {
+	if a == nil || a.pool == nil {
+		return 0
+	}
+	return a.pool.PoolSize()
 }

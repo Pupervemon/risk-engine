@@ -12,8 +12,8 @@ import (
 	"time"
 
 	grpcadapter "github.com/Pupervemon/risk-engine/internal/captcha/adapter/inbound/grpc"
-	captchaservice "github.com/Pupervemon/risk-engine/internal/captcha/service"
-	httptransport "github.com/Pupervemon/risk-engine/internal/captcha/transport/http"
+	httptransport "github.com/Pupervemon/risk-engine/internal/captcha/adapter/inbound/http"
+	captchabootstrap "github.com/Pupervemon/risk-engine/internal/captcha/bootstrap"
 	"github.com/Pupervemon/risk-engine/internal/shared/config"
 	"github.com/Pupervemon/risk-engine/internal/shared/logging"
 	"github.com/Pupervemon/risk-engine/internal/shared/registry"
@@ -25,7 +25,7 @@ import (
 )
 
 // To export Swagger docs later, run from the repo root:
-// swag init --parseInternal --outputTypes json,yaml --dir cmd/captcha-server,internal/captcha/transport/http -g main.go -o docs/swagger/captcha
+// swag init --parseInternal --outputTypes json,yaml --dir cmd/captcha-server,internal/captcha/adapter/inbound/http -g main.go -o docs/swagger/captcha
 //
 // @title Captcha Service HTTP API
 // @version 1.0.0
@@ -90,22 +90,21 @@ func main() {
 	logger.Info("redis connected")
 
 	// 创建验证码服务，负责验证码图片、校验逻辑以及运行时图片源管理。
-	captchaService := captchaservice.NewCaptchaService(rdb, &cfg.Captcha, logger)
-	if err := captchaService.EnableRuntimeImageSourceManager(); err != nil {
+	captchaComponents := captchabootstrap.NewCaptchaComponents(rdb, &cfg.Captcha, logger)
+	imageSourceComponents, err := captchabootstrap.NewRuntimeImageSourceComponents(rdb, &cfg.Captcha, captchaComponents.ImagePool, logger)
+	if err != nil {
 		logger.Fatal("failed to enable runtime image source manager", zap.Error(err))
 	}
-	// Token 服务单独封装，负责验证码 token 的生成、存储和验证。
-	tokenService := captchaservice.NewTokenService(rdb, &cfg.Token)
-	captchaUseCase := captchaservice.NewCaptchaUseCaseAdapter(captchaService)
-	tokenUseCase := captchaservice.NewTokenUseCaseAdapter(tokenService)
-	imageSourceUseCase := captchaservice.NewImageSourceUseCaseAdapter(captchaService)
+	captchaUseCase := captchaComponents.Captcha
+	tokenUseCase := captchabootstrap.NewTokenUseCase(rdb, &cfg.Token)
+	imageSourceUseCase := imageSourceComponents.UseCase
 	// gRPC 暴露的服务实现基于 token use case，提供给外部系统直接调用。
 	grpcService := grpcadapter.NewCaptchaTokenService(tokenUseCase)
 
 	// 如果配置启用了图片池，则启动后台刷新任务，定期预热可用图片资源。
 	if cfg.Captcha.ImagePool.Enabled {
 		logger.Info("starting image pool refresh job")
-		if err := captchaService.StartImageRefresh(context.Background()); err != nil {
+		if err := captchaComponents.Lifecycle.StartImageRefresh(context.Background()); err != nil {
 			logger.Error("failed to start image pool refresh job", zap.Error(err))
 		}
 	}
@@ -201,7 +200,7 @@ func main() {
 	logger.Info("received shutdown signal", zap.String("signal", sig.String()))
 
 	// 先停止后台刷新任务，避免服务退出时仍然继续访问外部资源。
-	captchaService.StopImageRefresh()
+	captchaComponents.Lifecycle.StopImageRefresh()
 
 	// 先从注册中心摘除实例，避免后续流量继续打到即将关闭的节点。
 	if err := nacosRegistry.Deregister(); err != nil {

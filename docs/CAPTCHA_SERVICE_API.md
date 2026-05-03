@@ -10,8 +10,8 @@
 ## 1. 接口范围
 
 - HTTP 服务入口: `cmd/captcha-server`
-- HTTP 路由实现: `internal/captcha/transport/http`
-- gRPC 服务实现: `internal/captcha/service`
+- HTTP 路由实现: `internal/captcha/adapter/inbound/http`
+- gRPC 服务实现: `internal/captcha/adapter/inbound/grpc`
 - Swagger 导出目录: `docs/swagger/captcha`
 
 ## 2. HTTP 接口
@@ -63,7 +63,7 @@
 从仓库根目录执行:
 
 ```bash
-swag init --parseInternal --outputTypes json,yaml --dir cmd/captcha-server,internal/captcha/transport/http -g main.go -o docs/swagger/captcha
+swag init --parseInternal --outputTypes json,yaml --dir cmd/captcha-server,internal/captcha/adapter/inbound/http -g main.go -o docs/swagger/captcha
 ```
 
 当前已生成:
@@ -74,6 +74,6 @@ swag init --parseInternal --outputTypes json,yaml --dir cmd/captcha-server,inter
 ## 5. 代码定位
 
 - HTTP 注解入口: `cmd/captcha-server/main.go`
-- HTTP 文档 stub: `internal/captcha/transport/http/swagger.go`
-- HTTP 文档模型: `internal/captcha/transport/http/swagger_models.go`
-- HTTP handler: `internal/captcha/transport/http`
+- HTTP 文档 stub: `internal/captcha/adapter/inbound/http/swagger.go`
+- HTTP 文档模型: `internal/captcha/adapter/inbound/http/swagger_models.go`
+- HTTP handler: `internal/captcha/adapter/inbound/http`

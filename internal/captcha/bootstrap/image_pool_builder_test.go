@@ -1,4 +1,4 @@
-package service
+package bootstrap
 
 import (
 	"testing"
@@ -9,16 +9,16 @@ import (
 func TestNewConfiguredImagePoolDisabled(t *testing.T) {
 	t.Parallel()
 
-	pool := newConfiguredImagePool(nil, &config.CaptchaConfigSpec{}, nil)
+	pool := NewConfiguredImagePool(nil, &config.CaptchaConfigSpec{}, nil)
 	if pool != nil {
-		t.Fatal("newConfiguredImagePool() returned pool when image pool is disabled")
+		t.Fatal("NewConfiguredImagePool() returned pool when image pool is disabled")
 	}
 }
 
 func TestNewConfiguredImagePoolUsesDefaultPoolSize(t *testing.T) {
 	t.Parallel()
 
-	pool := newConfiguredImagePool(nil, &config.CaptchaConfigSpec{
+	pool := NewConfiguredImagePool(nil, &config.CaptchaConfigSpec{
 		ImagePool: config.ImagePoolConfig{
 			Enabled:  true,
 			PoolSize: 0,
@@ -31,7 +31,7 @@ func TestNewConfiguredImagePoolUsesDefaultPoolSize(t *testing.T) {
 	}, nil)
 
 	if pool == nil {
-		t.Fatal("newConfiguredImagePool() returned nil")
+		t.Fatal("NewConfiguredImagePool() returned nil")
 	}
 	if pool.PoolSize() != 50 {
 		t.Fatalf("pool size = %d, want 50", pool.PoolSize())
