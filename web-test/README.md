@@ -56,5 +56,5 @@ go run ./web-test/test_grpc_client.go -addr localhost:9091 <TOKEN>
 
 ## 参考文档
 
-- [配置契约](../docs/CONFIG_GUIDE.md)
+- [配置契约](../docs/配置说明.md)
 - [项目总览](../README.md)

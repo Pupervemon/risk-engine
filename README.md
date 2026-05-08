@@ -27,7 +27,7 @@
 - 服务前缀环境变量: `RISK_*`、`CAPTCHA_*`
 - 兼容别名: 旧的无前缀变量仍可读取，但应视为过渡能力
 
-完整配置说明见 [docs/CONFIG_GUIDE.md](docs/CONFIG_GUIDE.md)。
+完整配置说明见 [docs/配置说明.md](docs/配置说明.md)。
 
 ## 快速启动
 
@@ -95,5 +95,5 @@ go build ./cmd/risk-server ./cmd/captcha-server ./web-test
 
 ## 参考文档
 
-- [配置契约](docs/CONFIG_GUIDE.md)
+- [配置契约](docs/配置说明.md)
 - [验证码前端调试说明](web-test/README.md)

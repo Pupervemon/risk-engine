@@ -1,4 +1,4 @@
-package transport
+package http
 
 import (
 	"context"
@@ -7,17 +7,18 @@ import (
 	"strconv"
 	"strings"
 
-	riskservice "github.com/Pupervemon/risk-engine/internal/risk/service"
+	"github.com/Pupervemon/risk-engine/internal/risk/application/ports"
+	"github.com/Pupervemon/risk-engine/internal/risk/domain"
 	"github.com/gin-gonic/gin"
 )
 
 type RiskAdminReader interface {
 	// ListRiskIPs 返回风险 IP 列表，支持分页和搜索条件。
-	ListRiskIPs(ctx context.Context, query riskservice.RiskIPListQuery) (*riskservice.RiskIPListResponse, error)
+	ListRiskIPs(ctx context.Context, query ports.RiskIPListQuery) (*ports.RiskIPListResponse, error)
 	// GetRiskIP 返回单个 IP 的风险详情。
-	GetRiskIP(ctx context.Context, ip string) (*riskservice.RiskIPDetail, error)
+	GetRiskIP(ctx context.Context, ip string) (*domain.RiskIPDetail, error)
 	// ListRiskIPEvents 返回某个 IP 关联的风险事件列表。
-	ListRiskIPEvents(ctx context.Context, ip string, query riskservice.RiskIPEventsQuery) (*riskservice.RiskIPEventsResponse, error)
+	ListRiskIPEvents(ctx context.Context, ip string, query ports.RiskIPEventsQuery) (*ports.RiskIPEventsResponse, error)
 }
 
 // RiskAdminHandler 提供风险管理后台使用的 HTTP 接口。
@@ -49,7 +50,7 @@ func (h *RiskAdminHandler) ListRiskIPs(c *gin.Context) {
 	}
 
 	// 将 HTTP 查询参数转换成业务层需要的查询对象。
-	resp, err := h.Reader.ListRiskIPs(c.Request.Context(), riskservice.RiskIPListQuery{
+	resp, err := h.Reader.ListRiskIPs(c.Request.Context(), ports.RiskIPListQuery{
 		Limit:  limit,
 		Offset: offset,
 		Search: strings.TrimSpace(c.Query("q")),
@@ -57,7 +58,7 @@ func (h *RiskAdminHandler) ListRiskIPs(c *gin.Context) {
 	if err != nil {
 		// 业务层将 IP 格式错误统一收敛为 ErrInvalidRiskIP，这里转成 400。
 		switch {
-		case errors.Is(err, riskservice.ErrInvalidRiskIP):
+		case errors.Is(err, domain.ErrInvalidRiskIP):
 			c.JSON(http.StatusBadRequest, gin.H{"error": "INVALID_IP"})
 		default:
 			// 其他错误视为服务端异常，由调用方感知为查询失败。
@@ -76,10 +77,10 @@ func (h *RiskAdminHandler) GetRiskIP(c *gin.Context) {
 	if err != nil {
 		// 非法 IP 直接返回 400，避免把无效请求继续向下传播。
 		switch {
-		case errors.Is(err, riskservice.ErrInvalidRiskIP):
+		case errors.Is(err, domain.ErrInvalidRiskIP):
 			c.JSON(http.StatusBadRequest, gin.H{"error": "INVALID_IP"})
 		// 业务层明确返回未找到时，对外暴露 404。
-		case errors.Is(err, riskservice.ErrRiskIPNotFound):
+		case errors.Is(err, domain.ErrRiskIPNotFound):
 			c.JSON(http.StatusNotFound, gin.H{"error": "RISK_IP_NOT_FOUND"})
 		default:
 			// 未知错误统一按服务异常处理。
@@ -109,16 +110,16 @@ func (h *RiskAdminHandler) GetRiskIPEvents(c *gin.Context) {
 	}
 
 	// 将参数打包成业务层的事件查询对象。
-	resp, err := h.Reader.ListRiskIPEvents(c.Request.Context(), c.Param("ip"), riskservice.RiskIPEventsQuery{
+	resp, err := h.Reader.ListRiskIPEvents(c.Request.Context(), c.Param("ip"), ports.RiskIPEventsQuery{
 		Limit:  limit,
 		Offset: offset,
 	})
 	if err != nil {
 		// 与单 IP 查询保持一致，IP 不合法返回 400，不存在返回 404。
 		switch {
-		case errors.Is(err, riskservice.ErrInvalidRiskIP):
+		case errors.Is(err, domain.ErrInvalidRiskIP):
 			c.JSON(http.StatusBadRequest, gin.H{"error": "INVALID_IP"})
-		case errors.Is(err, riskservice.ErrRiskIPNotFound):
+		case errors.Is(err, domain.ErrRiskIPNotFound):
 			c.JSON(http.StatusNotFound, gin.H{"error": "RISK_IP_NOT_FOUND"})
 		default:
 			// 其余错误由服务端兜底处理。

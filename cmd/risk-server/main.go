@@ -11,8 +11,7 @@ import (
 	"syscall"
 	"time"
 
-	riskservice "github.com/Pupervemon/risk-engine/internal/risk/service"
-	risktransport "github.com/Pupervemon/risk-engine/internal/risk/transport"
+	riskbootstrap "github.com/Pupervemon/risk-engine/internal/risk/bootstrap"
 	"github.com/Pupervemon/risk-engine/internal/shared/config"
 	"github.com/Pupervemon/risk-engine/internal/shared/logging"
 	"github.com/Pupervemon/risk-engine/internal/shared/registry"
@@ -24,7 +23,7 @@ import (
 )
 
 // To export Swagger docs later, run from the repo root:
-// swag init --parseInternal --outputTypes json,yaml -g cmd/risk-server/main.go -o docs/swagger/risk
+// swag init --parseInternal --outputTypes json,yaml --dir cmd/risk-server,internal/risk/adapter/inbound/http -g main.go -o docs/swagger/risk
 //
 // @title Risk Service HTTP API
 // @version 1.0.0
@@ -81,17 +80,8 @@ func main() {
 	}
 	logger.Info("redis connected")
 
-	riskService := riskservice.NewRiskService(rdb, &cfg.RiskRules, logger)
-
-	httpRouter := risktransport.NewHealthRouter(rdb, logger, risktransport.ServiceInfo{
-		Name:    cfg.Nacos.ServiceName,
-		Version: "1.0.0",
-		// Redis 同时承担规则数据和运行时依赖，启动时先建立连接并做健康探测。
-		Protocol:    "grpc",
-		Description: "Risk Engine - risk control service",
-		HTTPPort:    cfg.HTTP.Port,
-		GRPCPort:    cfg.Grpc.Port,
-	}, riskService)
+	riskComponents := riskbootstrap.NewRiskComponents(rdb, cfg, logger)
+	httpRouter := riskComponents.HTTPRouter
 
 	httpServer := &http.Server{
 		Addr:         fmt.Sprintf(":%d", cfg.HTTP.Port),
@@ -111,7 +101,7 @@ func main() {
 		// gRPC 服务在这里统一挂载 unary 拦截器，用于记录每次 RPC 的耗时和结果。
 	)
 
-	pb.RegisterRiskControlServiceServer(grpcServer, riskService)
+	pb.RegisterRiskControlServiceServer(grpcServer, riskComponents.GRPCService)
 	reflection.Register(grpcServer)
 
 	nacosRegistry, err := registry.NewNacosRegistry(&registry.NacosConfig{

@@ -1,4 +1,4 @@
-package transport
+package http
 
 // swaggerListRiskIPs godoc
 // @Summary List risk IP insights

@@ -1,4 +1,4 @@
-package transport
+package http
 
 // HealthComponentDoc documents the health status of a single dependency.
 type HealthComponentDoc struct {
