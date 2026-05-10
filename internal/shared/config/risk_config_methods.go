@@ -13,6 +13,7 @@ func (c *RiskConfig) Print() {
 	fmt.Println("=========== Risk Service Config ===========")
 	fmt.Printf("HTTP port: %d\n", c.HTTP.Port)
 	fmt.Printf("gRPC port: %d\n", c.Grpc.Port)
+	fmt.Printf("gRPC request timeout: %ds\n", c.Grpc.RequestTimeoutSeconds)
 
 	fmt.Println("-------------------------------------------")
 	fmt.Printf("Redis addr: %s\n", c.Redis.Addr)

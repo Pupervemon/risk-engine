@@ -1,5 +1,7 @@
 package config
 
+import "time"
+
 // HTTPConfig HTTP服务器配置
 type HTTPConfig struct {
 	// Port 是 HTTP 服务监听的端口号
@@ -9,7 +11,15 @@ type HTTPConfig struct {
 // GrpcConfig gRPC服务器配置
 type GrpcConfig struct {
 	// Port 是 gRPC 服务监听的端口号
-	Port int `mapstructure:"port"`
+	Port                  int `mapstructure:"port"`
+	RequestTimeoutSeconds int `mapstructure:"request_timeout_seconds"`
+}
+
+func (c GrpcConfig) RequestTimeout() time.Duration {
+	if c.RequestTimeoutSeconds <= 0 {
+		return 0
+	}
+	return time.Duration(c.RequestTimeoutSeconds) * time.Second
 }
 
 // RedisConfig Redis连接配置

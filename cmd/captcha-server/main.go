@@ -15,6 +15,7 @@ import (
 	httptransport "github.com/Pupervemon/risk-engine/internal/captcha/adapter/inbound/http"
 	captchabootstrap "github.com/Pupervemon/risk-engine/internal/captcha/bootstrap"
 	"github.com/Pupervemon/risk-engine/internal/shared/config"
+	grpcserver "github.com/Pupervemon/risk-engine/internal/shared/grpcserver"
 	"github.com/Pupervemon/risk-engine/internal/shared/logging"
 	"github.com/Pupervemon/risk-engine/internal/shared/registry"
 	captchapb "github.com/Pupervemon/risk-proto/gen/go/captcha/v1"
@@ -66,6 +67,7 @@ func main() {
 	logger.Info("starting captcha service",
 		zap.Int("http_port", cfg.HTTP.Port),
 		zap.Int("grpc_port", cfg.Grpc.Port),
+		zap.Int("grpc_request_timeout_seconds", cfg.Grpc.RequestTimeoutSeconds),
 		zap.Bool("nacos_enabled", cfg.Nacos.Enable))
 
 	// 初始化 Redis 客户端。
@@ -147,7 +149,10 @@ func main() {
 	}
 
 	// 注册 unary 拦截器，用于统一记录每个 RPC 的耗时和错误。
-	grpcServer := grpc.NewServer(grpc.UnaryInterceptor(UnaryLoggerInterceptor(logger)))
+	grpcServer := grpc.NewServer(grpc.ChainUnaryInterceptor(
+		grpcserver.UnaryLoggerInterceptor(logger),
+		grpcserver.UnaryTimeoutInterceptor(cfg.Grpc.RequestTimeout()),
+	))
 	captchapb.RegisterCaptchaTokenServiceServer(grpcServer, grpcService)
 	// 打开反射，方便调试和联调用 grpcurl、BloomRPC 之类的工具。
 	reflection.Register(grpcServer)
@@ -220,31 +225,12 @@ func main() {
 	}
 
 	// gRPC 服务使用 GracefulStop，等待现有 RPC 完成后再关闭连接。
-	grpcServer.GracefulStop()
-	logger.Info("grpc server closed")
-	logger.Info("captcha service stopped")
-}
-
-func UnaryLoggerInterceptor(logger *zap.Logger) grpc.UnaryServerInterceptor {
-	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
-		// 在调用前后记录时间，用于统计每个 RPC 的执行耗时。
-		start := time.Now()
-		resp, err := handler(ctx, req)
-		duration := time.Since(start)
-
-		// 统一补充方法名和耗时字段，方便在日志系统里聚合和检索。
-		fields := []zap.Field{
-			zap.String("method", info.FullMethod),
-			zap.Duration("duration", duration),
-		}
-
-		// 失败时记录错误日志，成功时记录普通访问日志。
-		if err != nil {
-			logger.Error("rpc request failed", append(fields, zap.Error(err))...)
-			return resp, err
-		}
-
-		logger.Info("rpc request succeeded", fields...)
-		return resp, nil
+	grpcShutdownCtx, grpcShutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer grpcShutdownCancel()
+	if grpcserver.GracefulStop(grpcShutdownCtx, grpcServer) {
+		logger.Info("grpc server closed")
+	} else {
+		logger.Warn("grpc server forced to stop after timeout")
 	}
+	logger.Info("captcha service stopped")
 }

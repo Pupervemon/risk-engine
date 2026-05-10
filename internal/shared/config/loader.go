@@ -158,6 +158,7 @@ func addLegacyEnvAliases(bindings envBindings, serviceName string) {
 	addBinding(bindings, "redis.dial_timeout_seconds", "REDIS_DIAL_TIMEOUT_SECONDS")
 	addBinding(bindings, "redis.read_timeout_seconds", "REDIS_READ_TIMEOUT_SECONDS")
 	addBinding(bindings, "redis.write_timeout_seconds", "REDIS_WRITE_TIMEOUT_SECONDS")
+	addBinding(bindings, "grpc.request_timeout_seconds", "GRPC_REQUEST_TIMEOUT_SECONDS")
 
 	addBinding(bindings, "nacos.enable", "NACOS_ENABLE")
 	addBinding(bindings, "nacos.server_addr", "NACOS_SERVER_ADDR")

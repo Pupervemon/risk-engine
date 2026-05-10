@@ -14,6 +14,9 @@ func validateRiskConfigStrict(cfg *RiskConfig, env string) error {
 	if err := validatePositiveInt("gRPC port", cfg.Grpc.Port); err != nil {
 		return err
 	}
+	if err := validateNonNegativeInt("grpc.request_timeout_seconds", cfg.Grpc.RequestTimeoutSeconds); err != nil {
+		return err
+	}
 	if err := validateRedisConfig(cfg.Redis); err != nil {
 		return err
 	}
@@ -62,6 +65,9 @@ func validateCaptchaConfigStrict(cfg *CaptchaConfig, env string) error {
 		return err
 	}
 	if err := validatePositiveInt("gRPC port", cfg.Grpc.Port); err != nil {
+		return err
+	}
+	if err := validateNonNegativeInt("grpc.request_timeout_seconds", cfg.Grpc.RequestTimeoutSeconds); err != nil {
 		return err
 	}
 	if err := validateRedisConfig(cfg.Redis); err != nil {

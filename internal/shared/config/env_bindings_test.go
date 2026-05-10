@@ -9,10 +9,13 @@ func TestRiskCanonicalEnvNamesOverrideConfigFiles(t *testing.T) {
 		"RISK_APP_ENV",
 		"RISK_CONFIG_FILE",
 		"RISK_HTTP_PORT",
+		"RISK_GRPC_REQUEST_TIMEOUT_SECONDS",
+		"GRPC_REQUEST_TIMEOUT_SECONDS",
 		"RISK_NACOS_NAMESPACE",
 	)
 
 	t.Setenv("RISK_HTTP_PORT", "12080")
+	t.Setenv("RISK_GRPC_REQUEST_TIMEOUT_SECONDS", "7")
 	t.Setenv("RISK_NACOS_NAMESPACE", "canonical-namespace")
 
 	cfg := loadRiskConfigForTest(t)
@@ -21,6 +24,9 @@ func TestRiskCanonicalEnvNamesOverrideConfigFiles(t *testing.T) {
 	}
 	if cfg.Nacos.Namespace != "canonical-namespace" {
 		t.Fatalf("expected canonical namespace, got %q", cfg.Nacos.Namespace)
+	}
+	if cfg.Grpc.RequestTimeoutSeconds != 7 {
+		t.Fatalf("expected canonical gRPC request timeout, got %d", cfg.Grpc.RequestTimeoutSeconds)
 	}
 }
 

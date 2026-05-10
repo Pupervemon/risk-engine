@@ -13,6 +13,7 @@ import (
 
 	riskbootstrap "github.com/Pupervemon/risk-engine/internal/risk/bootstrap"
 	"github.com/Pupervemon/risk-engine/internal/shared/config"
+	grpcserver "github.com/Pupervemon/risk-engine/internal/shared/grpcserver"
 	"github.com/Pupervemon/risk-engine/internal/shared/logging"
 	"github.com/Pupervemon/risk-engine/internal/shared/registry"
 	pb "github.com/Pupervemon/risk-proto/gen/go/risk/v1"
@@ -59,6 +60,7 @@ func main() {
 	logger.Info("starting risk service",
 		zap.Int("http_port", cfg.HTTP.Port),
 		zap.Int("grpc_port", cfg.Grpc.Port),
+		zap.Int("grpc_request_timeout_seconds", cfg.Grpc.RequestTimeoutSeconds),
 		zap.Bool("nacos_enabled", cfg.Nacos.Enable))
 
 	rdb := redis.NewClient(&redis.Options{
@@ -97,7 +99,10 @@ func main() {
 	}
 
 	grpcServer := grpc.NewServer(
-		grpc.UnaryInterceptor(UnaryLoggerInterceptor(logger)),
+		grpc.ChainUnaryInterceptor(
+			grpcserver.UnaryLoggerInterceptor(logger, riskRPCLogFields),
+			grpcserver.UnaryTimeoutInterceptor(cfg.Grpc.RequestTimeout()),
+		),
 		// gRPC 服务在这里统一挂载 unary 拦截器，用于记录每次 RPC 的耗时和结果。
 	)
 
@@ -165,36 +170,24 @@ func main() {
 		logger.Info("http server closed")
 	}
 
-	grpcServer.GracefulStop()
-	logger.Info("grpc server closed")
+	grpcShutdownCtx, grpcShutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer grpcShutdownCancel()
+	if grpcserver.GracefulStop(grpcShutdownCtx, grpcServer) {
+		logger.Info("grpc server closed")
+	} else {
+		logger.Warn("grpc server forced to stop after timeout")
+	}
 	logger.Info("risk service stopped")
 }
 
-func UnaryLoggerInterceptor(logger *zap.Logger) grpc.UnaryServerInterceptor {
-	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
-		start := time.Now()
-		resp, err := handler(ctx, req)
-		duration := time.Since(start)
-
-		fields := []zap.Field{
-			zap.String("method", info.FullMethod),
-			zap.Duration("duration", duration),
-		}
-
-		if err != nil {
-			logger.Error("rpc request failed", append(fields, zap.Error(err))...)
-			return resp, err
-		}
-
-		if r, ok := req.(*pb.CheckRequest); ok {
-			fields = append(fields,
-				zap.String("req_id", r.ReqId),
-				zap.String("ip", r.Ip),
-				zap.String("scene", r.Scene.String()),
-			)
-		}
-
-		logger.Info("rpc request succeeded", fields...)
-		return resp, nil
+func riskRPCLogFields(req interface{}) []zap.Field {
+	r, ok := req.(*pb.CheckRequest)
+	if !ok {
+		return nil
+	}
+	return []zap.Field{
+		zap.String("req_id", r.ReqId),
+		zap.String("ip", r.Ip),
+		zap.String("scene", r.Scene.String()),
 	}
 }

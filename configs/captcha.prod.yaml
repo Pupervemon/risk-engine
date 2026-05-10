@@ -8,6 +8,7 @@ http:
 
 grpc:
   port: 9091
+  request_timeout_seconds: 5
 
 redis:
   addr: "redis-internal:6379"
