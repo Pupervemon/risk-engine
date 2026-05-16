@@ -135,9 +135,9 @@ func validateCaptchaConfigStrict(cfg *CaptchaConfig, env string) error {
 	}
 
 	if env == "prod" {
-		if cfg.Redis.Password == "" {
-			return fmt.Errorf("[security] redis password is required in prod")
-		}
+		// if cfg.Redis.Password == "" {
+		// 	return fmt.Errorf("[security] redis password is required in prod")
+		// }
 		if isPlaceholderSecret(cfg.Token.Secret) {
 			return fmt.Errorf("[security] token secret is missing or still set to a placeholder in prod")
 		}

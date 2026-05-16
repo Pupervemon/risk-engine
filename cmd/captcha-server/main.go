@@ -142,6 +142,11 @@ func main() {
 		IdleTimeout:  60 * time.Second,
 	}
 
+	httpListener, err := net.Listen("tcp", httpServer.Addr)
+	if err != nil {
+		logger.Fatal("failed to listen http", zap.Error(err))
+	}
+
 	// gRPC 服务通过单独端口提供，便于内部系统以高效方式调用 token 接口。
 	grpcListener, err := net.Listen("tcp", fmt.Sprintf(":%d", cfg.Grpc.Port))
 	if err != nil {
@@ -179,7 +184,7 @@ func main() {
 	// HTTP 和 gRPC 都在独立 goroutine 中启动，避免阻塞主协程。
 	go func() {
 		logger.Info("captcha http server listening", zap.Int("port", cfg.HTTP.Port))
-		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		if err := httpServer.Serve(httpListener); err != nil && err != http.ErrServerClosed {
 			logger.Error("http server exited unexpectedly", zap.Error(err))
 		}
 	}()
@@ -191,8 +196,6 @@ func main() {
 		}
 	}()
 
-	// 启动后稍等片刻，尽量确保监听端口已经就绪，再进行注册中心注册。
-	time.Sleep(2 * time.Second)
 	if err := nacosRegistry.Register(); err != nil {
 		logger.Error("failed to register nacos service", zap.Error(err))
 	}
@@ -207,13 +210,14 @@ func main() {
 	// 先停止后台刷新任务，避免服务退出时仍然继续访问外部资源。
 	captchaComponents.Lifecycle.StopImageRefresh()
 
+	if err := nacosRegistry.UpdateHealth(false); err != nil {
+		logger.Error("failed to mark nacos service unhealthy", zap.Error(err))
+	}
+
 	// 先从注册中心摘除实例，避免后续流量继续打到即将关闭的节点。
 	if err := nacosRegistry.Deregister(); err != nil {
 		logger.Error("failed to deregister nacos service", zap.Error(err))
 	}
-
-	// 给注册中心和下游一些缓冲时间，减少关闭过程中出现的竞态。
-	time.Sleep(1 * time.Second)
 
 	// HTTP 服务使用带超时的 Shutdown，等待正在处理的请求完成。
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)

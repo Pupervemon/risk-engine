@@ -93,6 +93,11 @@ func main() {
 		IdleTimeout:  60 * time.Second,
 	}
 
+	httpListener, err := net.Listen("tcp", httpServer.Addr)
+	if err != nil {
+		logger.Fatal("failed to listen http", zap.Error(err))
+	}
+
 	grpcListener, err := net.Listen("tcp", fmt.Sprintf(":%d", cfg.Grpc.Port))
 	if err != nil {
 		logger.Fatal("failed to listen grpc", zap.Error(err))
@@ -128,9 +133,9 @@ func main() {
 	}
 
 	go func() {
-		// HTTP 服务器的 ListenAndServe 会阻塞当前 goroutine，因此放到独立协程启动。
+		// HTTP 监听端口已提前绑定成功，这里只负责接收请求。
 		logger.Info("risk http server listening", zap.Int("port", cfg.HTTP.Port))
-		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		if err := httpServer.Serve(httpListener); err != nil && err != http.ErrServerClosed {
 			logger.Error("http server exited unexpectedly", zap.Error(err))
 		}
 	}()
@@ -143,7 +148,6 @@ func main() {
 		}
 	}()
 
-	time.Sleep(2 * time.Second)
 	if err := nacosRegistry.Register(); err != nil {
 		logger.Error("failed to register nacos service", zap.Error(err))
 	}
@@ -154,17 +158,17 @@ func main() {
 
 	logger.Info("received shutdown signal", zap.String("signal", sig.String()))
 
-	if err := nacosRegistry.Deregister(); err != nil {
-		logger.Error("failed to deregister nacos service", zap.Error(err))
-		// HTTP 服务器主要提供健康检查和管理类接口。
+	if err := nacosRegistry.UpdateHealth(false); err != nil {
+		logger.Error("failed to mark nacos service unhealthy", zap.Error(err))
 	}
 
-	time.Sleep(1 * time.Second)
+	if err := nacosRegistry.Deregister(); err != nil {
+		logger.Error("failed to deregister nacos service", zap.Error(err))
+	}
 
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer shutdownCancel()
 	if err := httpServer.Shutdown(shutdownCtx); err != nil {
-		// 稍等一段时间，确保服务监听已建立后再执行注册。
 		logger.Error("failed to shutdown http server", zap.Error(err))
 	} else {
 		logger.Info("http server closed")

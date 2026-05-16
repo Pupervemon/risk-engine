@@ -3,13 +3,22 @@ package config
 import (
 	"fmt"
 	"net"
+	"strconv"
 	"strings"
 )
 
 // validateRedisConfig validates Redis connectivity settings.
 func validateRedisConfig(cfg RedisConfig) error {
-	if strings.TrimSpace(cfg.Addr) == "" {
+	addr := strings.TrimSpace(cfg.Addr)
+	if addr == "" {
 		return fmt.Errorf("redis addr is required")
+	}
+	host, port, err := net.SplitHostPort(addr)
+	if err != nil || host == "" || port == "" {
+		return fmt.Errorf("redis addr must be host:port, got %q", cfg.Addr)
+	}
+	if portNum, err := strconv.Atoi(port); err != nil || portNum <= 0 {
+		return fmt.Errorf("redis addr must use a valid port, got %q", cfg.Addr)
 	}
 	if cfg.DB < 0 {
 		return fmt.Errorf("redis DB cannot be negative")
