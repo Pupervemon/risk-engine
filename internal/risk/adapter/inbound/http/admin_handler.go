@@ -1,7 +1,6 @@
 package http
 
 import (
-	"context"
 	"errors"
 	"net/http"
 	"strconv"
@@ -12,23 +11,14 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-type RiskAdminReader interface {
-	// ListRiskIPs 返回风险 IP 列表，支持分页和搜索条件。
-	ListRiskIPs(ctx context.Context, query ports.RiskIPListQuery) (*ports.RiskIPListResponse, error)
-	// GetRiskIP 返回单个 IP 的风险详情。
-	GetRiskIP(ctx context.Context, ip string) (*domain.RiskIPDetail, error)
-	// ListRiskIPEvents 返回某个 IP 关联的风险事件列表。
-	ListRiskIPEvents(ctx context.Context, ip string, query ports.RiskIPEventsQuery) (*ports.RiskIPEventsResponse, error)
-}
-
 // RiskAdminHandler 提供风险管理后台使用的 HTTP 接口。
 // 它只负责参数解析、错误转换和响应输出，具体业务逻辑交给 Reader 实现。
 type RiskAdminHandler struct {
-	Reader RiskAdminReader
+	Reader ports.RiskInsightQuery
 }
 
 // NewRiskAdminHandler 创建风险管理接口处理器。
-func NewRiskAdminHandler(reader RiskAdminReader) *RiskAdminHandler {
+func NewRiskAdminHandler(reader ports.RiskInsightQuery) *RiskAdminHandler {
 	return &RiskAdminHandler{Reader: reader}
 }
 

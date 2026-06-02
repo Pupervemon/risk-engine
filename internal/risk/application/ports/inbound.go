@@ -103,6 +103,13 @@ type UserThrottleUseCase interface {
 	JudgeSubmission(ctx context.Context, cmd UserActionCommand) (UserActionResult, error)
 }
 
+type RiskControlUseCase interface {
+	RiskCheckUseCase
+	RiskEventUseCase
+	BlacklistUseCase
+	UserThrottleUseCase
+}
+
 type RiskInsightQuery interface {
 	ListRiskIPs(ctx context.Context, query RiskIPListQuery) (*RiskIPListResponse, error)
 	GetRiskIP(ctx context.Context, ip string) (*domain.RiskIPDetail, error)

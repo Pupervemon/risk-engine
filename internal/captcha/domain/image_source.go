@@ -1,13 +1,19 @@
 package domain
 
-// ImageMeta 包含验证码图片池使用的标准化图片数据。
+import (
+	"fmt"
+	"net/url"
+	"strings"
+)
+
+// ImageMeta is a normalized background image stored in the captcha image pool.
 type ImageMeta struct {
 	ID   string
 	Data []byte
 	URL  string
 }
 
-// ImagePoolSnapshot 描述当前活跃的图片池代次。
+// ImagePoolSnapshot describes the currently active image-pool generation.
 type ImagePoolSnapshot struct {
 	ImageCount          int64
 	ActiveGeneration    string
@@ -26,7 +32,7 @@ type ImagePoolGenerationMeta struct {
 	CreatedAt           string
 }
 
-// ImageSourcePatch 表示运行时图片源的部分更新。
+// ImageSourcePatch is a partial runtime image-source update.
 type ImageSourcePatch struct {
 	URL                *string
 	APIKey             *string
@@ -35,7 +41,7 @@ type ImageSourcePatch struct {
 	RetryCount         *int
 }
 
-// ImageSourceRuntimeConfig 是生效中的运行时图片源配置。
+// ImageSourceRuntimeConfig is the runtime image-source config stored in Redis.
 type ImageSourceRuntimeConfig struct {
 	Version            int64
 	URL                string
@@ -46,7 +52,75 @@ type ImageSourceRuntimeConfig struct {
 	UpdatedAt          string
 }
 
-// ImageSourceConfigView 是图片源配置的安全对外视图。
+func BuildImageSourceCandidateConfig(current ImageSourceRuntimeConfig, patch ImageSourcePatch) (ImageSourceRuntimeConfig, error) {
+	candidate := current
+
+	if patch.URL != nil {
+		candidate.URL = strings.TrimSpace(*patch.URL)
+	}
+	if patch.APIKey != nil {
+		candidate.APIKey = strings.TrimSpace(*patch.APIKey)
+	}
+	if patch.TimeoutSeconds != nil {
+		candidate.TimeoutSeconds = *patch.TimeoutSeconds
+	}
+	if patch.RateLimitPerMinute != nil {
+		candidate.RateLimitPerMinute = *patch.RateLimitPerMinute
+	}
+	if patch.RetryCount != nil {
+		candidate.RetryCount = *patch.RetryCount
+	}
+
+	candidate = candidate.Normalized()
+	if err := candidate.Validate(); err != nil {
+		return ImageSourceRuntimeConfig{}, err
+	}
+
+	return candidate, nil
+}
+
+func (cfg ImageSourceRuntimeConfig) Normalized() ImageSourceRuntimeConfig {
+	cfg.URL = strings.TrimSpace(cfg.URL)
+	cfg.APIKey = strings.TrimSpace(cfg.APIKey)
+	return cfg
+}
+
+func (cfg ImageSourceRuntimeConfig) Validate() error {
+	if cfg.URL == "" {
+		return fmt.Errorf("image source url is required")
+	}
+
+	parsedURL, err := url.ParseRequestURI(cfg.URL)
+	if err != nil || !parsedURL.IsAbs() {
+		return fmt.Errorf("image source url must be an absolute URL")
+	}
+
+	if cfg.TimeoutSeconds <= 0 {
+		return fmt.Errorf("timeoutSeconds must be greater than 0")
+	}
+	if cfg.RateLimitPerMinute <= 0 {
+		return fmt.Errorf("rateLimitPerMinute must be greater than 0")
+	}
+	if cfg.RetryCount < 0 {
+		return fmt.Errorf("retryCount cannot be negative")
+	}
+
+	return nil
+}
+
+func (cfg ImageSourceRuntimeConfig) PublicView() ImageSourceConfigView {
+	return ImageSourceConfigView{
+		Version:            cfg.Version,
+		URL:                cfg.URL,
+		APIKeyConfigured:   cfg.APIKey != "",
+		TimeoutSeconds:     cfg.TimeoutSeconds,
+		RateLimitPerMinute: cfg.RateLimitPerMinute,
+		RetryCount:         cfg.RetryCount,
+		UpdatedAt:          cfg.UpdatedAt,
+	}
+}
+
+// ImageSourceConfigView is the safe public view of an image-source config.
 type ImageSourceConfigView struct {
 	Version            int64
 	URL                string
@@ -79,7 +153,7 @@ type ImageSourceRuntimeStatus struct {
 	LastRefreshError    string
 }
 
-// ImageSourceStatus 是图片源管理接口使用的应用快照。
+// ImageSourceStatus is the application status returned by image-source admin APIs.
 type ImageSourceStatus struct {
 	Enabled             bool
 	Config              ImageSourceConfigView
@@ -96,7 +170,7 @@ type ImageSourceStatus struct {
 	GenerationCount     int64
 }
 
-// ImageSourceValidationResult 是图片源校验的返回结果。
+// ImageSourceValidationResult is returned after checking the current source config.
 type ImageSourceValidationResult struct {
 	Config      ImageSourceConfigView
 	ValidatedAt string

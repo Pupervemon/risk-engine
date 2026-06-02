@@ -16,6 +16,17 @@ type SliderAnswer struct {
 	DY int
 }
 
+func (a SliderAnswer) Matches(pointX, pointY, tolerance int) bool {
+	rangeSize := tolerance * 2
+	minX := a.DX - tolerance
+	minY := a.DY - tolerance
+
+	return pointX >= minX &&
+		pointX <= minX+rangeSize &&
+		pointY >= minY &&
+		pointY <= minY+rangeSize
+}
+
 // GeneratedSlider is the normalized output of a slider generator adapter.
 type GeneratedSlider struct {
 	MasterImage string

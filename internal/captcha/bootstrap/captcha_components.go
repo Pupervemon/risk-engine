@@ -2,7 +2,6 @@ package bootstrap
 
 import (
 	captchaadapter "github.com/Pupervemon/risk-engine/internal/captcha/adapter/outbound/captcha"
-	imagepooladapter "github.com/Pupervemon/risk-engine/internal/captcha/adapter/outbound/imagepool"
 	redisadapter "github.com/Pupervemon/risk-engine/internal/captcha/adapter/outbound/redis"
 	captchaapp "github.com/Pupervemon/risk-engine/internal/captcha/application"
 	appports "github.com/Pupervemon/risk-engine/internal/captcha/application/ports"
@@ -12,9 +11,8 @@ import (
 )
 
 type CaptchaComponents struct {
-	ImagePool    appports.BackgroundImagePool
-	Captcha      appports.CaptchaUseCase
-	UseImagePool bool
+	ImagePool appports.BackgroundImagePool
+	Captcha   appports.CaptchaUseCase
 }
 
 func NewCaptchaComponents(rdb *redis.Client, cfg *config.CaptchaConfigSpec, logger *zap.Logger) CaptchaComponents {
@@ -26,7 +24,10 @@ func NewCaptchaComponents(rdb *redis.Client, cfg *config.CaptchaConfigSpec, logg
 	}
 
 	imagePool := NewConfiguredImagePool(rdb, cfg, logger)
-	imagePoolPort := imagepooladapter.NewPortAdapter(imagePool)
+	var imagePoolPort appports.BackgroundImagePool
+	if imagePool != nil {
+		imagePoolPort = imagePool
+	}
 
 	return CaptchaComponents{
 		ImagePool: imagePoolPort,
@@ -36,7 +37,6 @@ func NewCaptchaComponents(rdb *redis.Client, cfg *config.CaptchaConfigSpec, logg
 			imagePoolPort,
 			CaptchaOptionsFromSharedConfig(cfg),
 		),
-		UseImagePool: cfg.ImagePool.Enabled,
 	}
 }
 

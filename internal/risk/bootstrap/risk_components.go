@@ -36,7 +36,7 @@ func NewRiskComponents(rdb *goredis.Client, cfg *config.RiskConfig, logger *zap.
 		logger,
 	)
 
-	grpcService := grpcadapter.NewRiskControlService(useCase, useCase, useCase, useCase)
+	grpcService := grpcadapter.NewRiskControlService(useCase)
 	httpRouter := httpadapter.NewRiskRouter(rdb, logger, httpadapter.ServiceInfo{
 		Name:        cfg.Nacos.ServiceName,
 		Version:     "1.0.0",

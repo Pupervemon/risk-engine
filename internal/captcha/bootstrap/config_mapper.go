@@ -18,9 +18,7 @@ func CaptchaOptionsFromSharedConfig(cfg *config.CaptchaConfigSpec) captchaapp.Ca
 	return captchaapp.CaptchaOptions{
 		TTLSeconds:      cfg.TTLSeconds,
 		SliderTolerance: cfg.SliderTolerance,
-		RequireTrack:    cfg.TrackValidation.Enabled,
-		UseImagePool:    cfg.ImagePool.Enabled,
-		TrackValidation: captchaapp.TrackValidationOptions{
+		TrackValidation: domain.TrackValidationPolicy{
 			Enabled:        cfg.TrackValidation.Enabled,
 			MinPoints:      cfg.TrackValidation.MinPoints,
 			MinDurationMs:  cfg.TrackValidation.MinDurationMs,
@@ -76,12 +74,15 @@ func ImageSourceRuntimeConfigFromShared(cfg config.ExternalImageAPIConfig) domai
 	}
 }
 
-func NewConfiguredImagePool(rdb *redis.Client, cfg *config.CaptchaConfigSpec, logger *zap.Logger) *imagepooladapter.RedisImagePool {
+func NewConfiguredImagePool(rdb *redis.Client, cfg *config.CaptchaConfigSpec, logger *zap.Logger) *imagepooladapter.ImagePool {
 	if cfg == nil || !cfg.ImagePool.Enabled {
 		return nil
 	}
 
-	poolSize := imagePoolSizeFromSharedConfig(cfg)
+	poolSize := cfg.ImagePool.PoolSize
+	if poolSize <= 0 {
+		poolSize = 50
+	}
 	imagePool := imagepooladapter.NewRedisImagePool(rdb, logger, poolSize)
 
 	if logger != nil {
@@ -91,13 +92,6 @@ func NewConfiguredImagePool(rdb *redis.Client, cfg *config.CaptchaConfigSpec, lo
 	}
 
 	return imagePool
-}
-
-func imagePoolSizeFromSharedConfig(cfg *config.CaptchaConfigSpec) int {
-	if cfg == nil || cfg.ImagePool.PoolSize <= 0 {
-		return 50
-	}
-	return cfg.ImagePool.PoolSize
 }
 
 func normalizedWidth(width int) int {

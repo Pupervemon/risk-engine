@@ -13,24 +13,11 @@ import (
 
 type RiskControlService struct {
 	pb.UnimplementedRiskControlServiceServer
-	CheckUseCase     ports.RiskCheckUseCase
-	EventUseCase     ports.RiskEventUseCase
-	BlacklistUseCase ports.BlacklistUseCase
-	ThrottleUseCase  ports.UserThrottleUseCase
+	UseCase ports.RiskControlUseCase
 }
 
-func NewRiskControlService(
-	check ports.RiskCheckUseCase,
-	event ports.RiskEventUseCase,
-	blacklist ports.BlacklistUseCase,
-	throttle ports.UserThrottleUseCase,
-) *RiskControlService {
-	return &RiskControlService{
-		CheckUseCase:     check,
-		EventUseCase:     event,
-		BlacklistUseCase: blacklist,
-		ThrottleUseCase:  throttle,
-	}
+func NewRiskControlService(useCase ports.RiskControlUseCase) *RiskControlService {
+	return &RiskControlService{UseCase: useCase}
 }
 
 func (s *RiskControlService) Check(ctx context.Context, req *pb.CheckRequest) (*pb.CheckResponse, error) {
@@ -38,7 +25,7 @@ func (s *RiskControlService) Check(ctx context.Context, req *pb.CheckRequest) (*
 		return nil, status.Error(codes.InvalidArgument, "REQUEST_EMPTY")
 	}
 
-	decision, err := s.CheckUseCase.Check(ctx, checkCommandFromProto(req))
+	decision, err := s.UseCase.Check(ctx, checkCommandFromProto(req))
 	if err != nil {
 		return nil, err
 	}
@@ -51,7 +38,7 @@ func (s *RiskControlService) ReportEvent(ctx context.Context, req *pb.ReportEven
 		return nil, status.Error(codes.InvalidArgument, "REQUEST_EMPTY")
 	}
 
-	result, err := s.EventUseCase.ReportEvent(ctx, reportEventCommandFromProto(req))
+	result, err := s.UseCase.ReportEvent(ctx, reportEventCommandFromProto(req))
 	if err != nil {
 		switch {
 		case errors.Is(err, domain.ErrUnsupportedScene):
@@ -71,7 +58,7 @@ func (s *RiskControlService) AddBlacklist(ctx context.Context, req *pb.AddBlackl
 		return nil, status.Error(codes.InvalidArgument, "REQUEST_EMPTY")
 	}
 
-	result, err := s.BlacklistUseCase.AddBlacklist(ctx, addBlacklistCommandFromProto(req))
+	result, err := s.UseCase.AddBlacklist(ctx, addBlacklistCommandFromProto(req))
 	if err != nil {
 		return nil, err
 	}
@@ -84,7 +71,7 @@ func (s *RiskControlService) OnlineSelfTest(ctx context.Context, req *pb.OnlineS
 		return nil, status.Error(codes.InvalidArgument, "REQUEST_EMPTY")
 	}
 
-	result, err := s.ThrottleUseCase.OnlineSelfTest(ctx, onlineSelfTestCommandFromProto(req))
+	result, err := s.UseCase.OnlineSelfTest(ctx, onlineSelfTestCommandFromProto(req))
 	if err != nil {
 		return nil, userActionError(err)
 	}
@@ -97,7 +84,7 @@ func (s *RiskControlService) JudgeSubmission(ctx context.Context, req *pb.JudgeS
 		return nil, status.Error(codes.InvalidArgument, "REQUEST_EMPTY")
 	}
 
-	result, err := s.ThrottleUseCase.JudgeSubmission(ctx, judgeSubmissionCommandFromProto(req))
+	result, err := s.UseCase.JudgeSubmission(ctx, judgeSubmissionCommandFromProto(req))
 	if err != nil {
 		return nil, userActionError(err)
 	}

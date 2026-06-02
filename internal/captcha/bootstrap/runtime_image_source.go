@@ -37,6 +37,10 @@ func NewRuntimeImageSourceUseCase(
 	if cfg != nil {
 		externalImageAPI = cfg.ExternalImageAPI
 	}
+	poolSize := 50
+	if cfg != nil && cfg.ImagePool.PoolSize > 0 {
+		poolSize = cfg.ImagePool.PoolSize
+	}
 
 	store := redisadapter.NewImageSourceStore(rdb)
 	providerFactory := imageadapter.NewExternalImageProviderFactory(logger, width, height)
@@ -48,7 +52,7 @@ func NewRuntimeImageSourceUseCase(
 		imagePool,
 		store,
 		providerFactory,
-		captchaapp.ImageSourceOptions{PoolSize: imagePoolSizeFromSharedConfig(cfg)},
+		captchaapp.ImageSourceOptions{PoolSize: poolSize},
 	), nil
 }
 
@@ -68,17 +72,17 @@ func ensureRuntimeImageSourceConfig(store appports.RuntimeImageSourceStore, cfg 
 		return err
 	}
 	if found {
-		if err := captchaapp.ValidateImageSourceRuntimeConfig(persisted); err != nil {
+		if err := persisted.Validate(); err != nil {
 			return err
 		}
 		logger.Info("loaded runtime image source config from redis", zap.String("url", persisted.URL))
 		return nil
 	}
 
-	initial := captchaapp.NormalizeImageSourceRuntimeConfig(ImageSourceRuntimeConfigFromShared(cfg))
+	initial := ImageSourceRuntimeConfigFromShared(cfg).Normalized()
 	initial.Version = 1
 	initial.UpdatedAt = time.Now().Format(time.RFC3339)
-	if err := captchaapp.ValidateImageSourceRuntimeConfig(initial); err != nil {
+	if err := initial.Validate(); err != nil {
 		return err
 	}
 	if err := store.Save(ctx, initial); err != nil {

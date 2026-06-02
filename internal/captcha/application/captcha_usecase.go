@@ -16,18 +16,7 @@ import (
 type CaptchaOptions struct {
 	TTLSeconds      int
 	SliderTolerance int
-	RequireTrack    bool
-	UseImagePool    bool
-	TrackValidation TrackValidationOptions
-}
-
-// TrackValidationOptions controls optional mouse-track validation.
-type TrackValidationOptions struct {
-	Enabled        bool
-	MinPoints      int
-	MinDurationMs  int64
-	MaxDurationMs  int64
-	PointTolerance int
+	TrackValidation domain.TrackValidationPolicy
 }
 
 // CaptchaUseCase implements slider captcha generation and verification.
@@ -63,7 +52,7 @@ func (u *CaptchaUseCase) Generate(ctx context.Context) (domain.SliderChallenge, 
 	}
 
 	var background []byte
-	if u.opts.UseImagePool && u.imagePool != nil {
+	if u.imagePool != nil {
 		if imageData, err := u.imagePool.Random(ctx); err == nil {
 			background = imageData
 		}
@@ -89,7 +78,7 @@ func (u *CaptchaUseCase) Generate(ctx context.Context) (domain.SliderChallenge, 
 		TileImage:         generated.TileImage,
 		TargetY:           generated.TargetY,
 		ExpiresIn:         u.opts.TTLSeconds,
-		RequireMouseTrack: u.opts.RequireTrack,
+		RequireMouseTrack: u.opts.TrackValidation.Enabled,
 	}, nil
 }
 
@@ -109,7 +98,7 @@ func (u *CaptchaUseCase) Verify(ctx context.Context, cmd appports.VerifyCaptchaC
 		return appports.VerifyCaptchaResult{Valid: false, Reason: "REDIS_ERROR"}, err
 	}
 
-	if !sliderPositionMatches(cmd.PointX, cmd.PointY, answer.DX, answer.DY, u.opts.SliderTolerance) {
+	if !answer.Matches(cmd.PointX, cmd.PointY, u.opts.SliderTolerance) {
 		_ = u.answers.Delete(ctx, cmd.CaptchaID)
 		return appports.VerifyCaptchaResult{Valid: false, Reason: "CAPTCHA_MISMATCH"}, nil
 	}
@@ -120,7 +109,7 @@ func (u *CaptchaUseCase) Verify(ctx context.Context, cmd appports.VerifyCaptchaC
 			return appports.VerifyCaptchaResult{Valid: false, Reason: "TRACK_REQUIRED"}, nil
 		}
 
-		trackResult := validateTrack(u.opts.TrackValidation, cmd.MouseTrack, answer.DX, answer.DY)
+		trackResult := u.opts.TrackValidation.Validate(cmd.MouseTrack, answer)
 		if !trackResult.Valid {
 			_ = u.answers.Delete(ctx, cmd.CaptchaID)
 			return appports.VerifyCaptchaResult{Valid: false, Reason: trackResult.Code}, nil
@@ -143,18 +132,6 @@ func normalizeCaptchaOptions(opts CaptchaOptions) CaptchaOptions {
 
 func (u *CaptchaUseCase) ttl() time.Duration {
 	return time.Duration(u.opts.TTLSeconds) * time.Second
-}
-
-func sliderPositionMatches(sx, sy, dx, dy, padding int) bool {
-	newX := padding * 2
-	newY := padding * 2
-	newDx := dx - padding
-	newDy := dy - padding
-
-	return sx >= newDx &&
-		sx <= newDx+newX &&
-		sy >= newDy &&
-		sy <= newDy+newY
 }
 
 func randomHex(n int) (string, error) {

@@ -3,13 +3,14 @@ package http
 import (
 	"time"
 
+	"github.com/Pupervemon/risk-engine/internal/risk/application/ports"
 	"github.com/Pupervemon/risk-engine/internal/shared/health"
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 )
 
-func NewRiskRouter(redisClient *redis.Client, logger *zap.Logger, serviceInfo ServiceInfo, adminReader RiskAdminReader) *gin.Engine {
+func NewRiskRouter(redisClient *redis.Client, logger *zap.Logger, serviceInfo ServiceInfo, adminReader ports.RiskInsightQuery) *gin.Engine {
 	serviceInfo = serviceInfo.normalized()
 
 	router := gin.New()

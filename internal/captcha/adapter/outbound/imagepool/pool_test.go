@@ -10,25 +10,25 @@ import (
 	"github.com/Pupervemon/risk-engine/internal/captcha/domain"
 )
 
-func TestRedisImagePoolReturnsErrorWhenRepositoryMissing(t *testing.T) {
+func TestImagePoolReturnsErrorWhenRepositoryMissing(t *testing.T) {
 	t.Parallel()
 
-	pool := newRedisImagePool(nil, nil, 1)
+	pool := newImagePool(nil, nil, 1)
 
-	_, err := pool.GetRandom(context.Background())
+	_, err := pool.Random(context.Background())
 	if err == nil {
-		t.Fatal("GetRandom() error = nil, want repository error")
+		t.Fatal("Random() error = nil, want repository error")
 	}
 	if !strings.Contains(err.Error(), "image pool repository is not configured") {
-		t.Fatalf("GetRandom() error = %q, want repository configuration error", err.Error())
+		t.Fatalf("Random() error = %q, want repository configuration error", err.Error())
 	}
 }
 
-func TestRedisImagePoolRefreshWithProviderUsesLockAndProvider(t *testing.T) {
+func TestImagePoolRefreshWithProviderUsesLockAndProvider(t *testing.T) {
 	t.Parallel()
 
 	repository := &fakeImagePoolRepository{}
-	pool := newRedisImagePool(repository, nil, 2)
+	pool := newImagePool(repository, nil, 2)
 	provider := &fakeImageProvider{
 		images: []domain.ImageMeta{
 			{ID: "img-1", Data: []byte("image-1"), URL: "https://example.test/img-1.jpg"},
@@ -63,11 +63,11 @@ func TestRedisImagePoolRefreshWithProviderUsesLockAndProvider(t *testing.T) {
 	}
 }
 
-func TestRedisImagePoolRefreshInProgressUsesDomainError(t *testing.T) {
+func TestImagePoolRefreshInProgressUsesDomainError(t *testing.T) {
 	t.Parallel()
 
 	repository := &busyImagePoolRepository{}
-	pool := newRedisImagePool(repository, nil, 1)
+	pool := newImagePool(repository, nil, 1)
 	provider := &fakeImageProvider{
 		images: []domain.ImageMeta{
 			{ID: "img-1", Data: []byte("image-1"), URL: "https://example.test/img-1.jpg"},

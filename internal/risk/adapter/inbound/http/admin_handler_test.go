@@ -16,7 +16,7 @@ import (
 	"go.uber.org/zap"
 )
 
-type fakeRiskAdminReader struct {
+type fakeRiskInsightQuery struct {
 	listQuery   ports.RiskIPListQuery
 	listResp    *ports.RiskIPListResponse
 	listErr     error
@@ -29,24 +29,24 @@ type fakeRiskAdminReader struct {
 	eventsErr   error
 }
 
-func (f *fakeRiskAdminReader) ListRiskIPs(_ context.Context, query ports.RiskIPListQuery) (*ports.RiskIPListResponse, error) {
+func (f *fakeRiskInsightQuery) ListRiskIPs(_ context.Context, query ports.RiskIPListQuery) (*ports.RiskIPListResponse, error) {
 	f.listQuery = query
 	return f.listResp, f.listErr
 }
 
-func (f *fakeRiskAdminReader) GetRiskIP(_ context.Context, ip string) (*domain.RiskIPDetail, error) {
+func (f *fakeRiskInsightQuery) GetRiskIP(_ context.Context, ip string) (*domain.RiskIPDetail, error) {
 	f.getIP = ip
 	return f.getResp, f.getErr
 }
 
-func (f *fakeRiskAdminReader) ListRiskIPEvents(_ context.Context, ip string, query ports.RiskIPEventsQuery) (*ports.RiskIPEventsResponse, error) {
+func (f *fakeRiskInsightQuery) ListRiskIPEvents(_ context.Context, ip string, query ports.RiskIPEventsQuery) (*ports.RiskIPEventsResponse, error) {
 	f.eventsIP = ip
 	f.eventsQuery = query
 	return f.eventsResp, f.eventsErr
 }
 
 func TestRiskAdminRoutesRequireGatewayPrincipal(t *testing.T) {
-	router := newRiskAdminTestRouter(&fakeRiskAdminReader{})
+	router := newRiskAdminTestRouter(&fakeRiskInsightQuery{})
 
 	recorder := performRiskAdminRequest(router, stdhttp.MethodGet, "/api/v1/admin/risk-ips", nil)
 	assertHTTPStatus(t, recorder, stdhttp.StatusUnauthorized)
@@ -54,7 +54,7 @@ func TestRiskAdminRoutesRequireGatewayPrincipal(t *testing.T) {
 }
 
 func TestRiskAdminRoutesRejectInsufficientRole(t *testing.T) {
-	router := newRiskAdminTestRouter(&fakeRiskAdminReader{})
+	router := newRiskAdminTestRouter(&fakeRiskInsightQuery{})
 	headers := stdhttp.Header{
 		standardUserIDHeader:    []string{"42"},
 		standardUserRolesHeader: []string{"1"},
@@ -66,7 +66,7 @@ func TestRiskAdminRoutesRejectInsufficientRole(t *testing.T) {
 }
 
 func TestListRiskIPsSuccess(t *testing.T) {
-	reader := &fakeRiskAdminReader{
+	reader := &fakeRiskInsightQuery{
 		listResp: &ports.RiskIPListResponse{
 			Items: []domain.RiskIPSummary{
 				{
@@ -110,7 +110,7 @@ func TestListRiskIPsValidatesPagination(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			router := newRiskAdminTestRouter(&fakeRiskAdminReader{})
+			router := newRiskAdminTestRouter(&fakeRiskInsightQuery{})
 
 			recorder := performRiskAdminRequest(router, stdhttp.MethodGet, tt.path, adminHeaders(RoleAdmin))
 			assertHTTPStatus(t, recorder, tt.statusCode)
@@ -132,7 +132,7 @@ func TestListRiskIPsMapsReaderErrors(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			router := newRiskAdminTestRouter(&fakeRiskAdminReader{listErr: tt.err})
+			router := newRiskAdminTestRouter(&fakeRiskInsightQuery{listErr: tt.err})
 
 			recorder := performRiskAdminRequest(router, stdhttp.MethodGet, "/api/v1/admin/risk-ips?q=bad-ip", adminHeaders(RoleTeacher))
 			assertHTTPStatus(t, recorder, tt.statusCode)
@@ -142,7 +142,7 @@ func TestListRiskIPsMapsReaderErrors(t *testing.T) {
 }
 
 func TestGetRiskIPSuccess(t *testing.T) {
-	reader := &fakeRiskAdminReader{
+	reader := &fakeRiskInsightQuery{
 		getResp: &domain.RiskIPDetail{
 			RiskIPSummary: domain.RiskIPSummary{
 				IP:          "127.0.0.1",
@@ -181,7 +181,7 @@ func TestGetRiskIPMapsReaderErrors(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			router := newRiskAdminTestRouter(&fakeRiskAdminReader{getErr: tt.err})
+			router := newRiskAdminTestRouter(&fakeRiskInsightQuery{getErr: tt.err})
 
 			recorder := performRiskAdminRequest(router, stdhttp.MethodGet, "/api/v1/admin/risk-ips/127.0.0.1", adminHeaders(RoleTeacher))
 			assertHTTPStatus(t, recorder, tt.statusCode)
@@ -191,7 +191,7 @@ func TestGetRiskIPMapsReaderErrors(t *testing.T) {
 }
 
 func TestListRiskIPEventsSuccess(t *testing.T) {
-	reader := &fakeRiskAdminReader{
+	reader := &fakeRiskInsightQuery{
 		eventsResp: &ports.RiskIPEventsResponse{
 			IP: "127.0.0.1",
 			Items: []domain.RiskIPEvent{
@@ -236,7 +236,7 @@ func TestListRiskIPEventsValidatesPagination(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			router := newRiskAdminTestRouter(&fakeRiskAdminReader{})
+			router := newRiskAdminTestRouter(&fakeRiskInsightQuery{})
 
 			recorder := performRiskAdminRequest(router, stdhttp.MethodGet, tt.path, adminHeaders(RoleAdmin))
 			assertHTTPStatus(t, recorder, stdhttp.StatusBadRequest)
@@ -259,7 +259,7 @@ func TestListRiskIPEventsMapsReaderErrors(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			router := newRiskAdminTestRouter(&fakeRiskAdminReader{eventsErr: tt.err})
+			router := newRiskAdminTestRouter(&fakeRiskInsightQuery{eventsErr: tt.err})
 
 			recorder := performRiskAdminRequest(router, stdhttp.MethodGet, "/api/v1/admin/risk-ips/127.0.0.1/events", adminHeaders(RoleTeacher))
 			assertHTTPStatus(t, recorder, tt.statusCode)
@@ -268,7 +268,7 @@ func TestListRiskIPEventsMapsReaderErrors(t *testing.T) {
 	}
 }
 
-func newRiskAdminTestRouter(reader RiskAdminReader) *gin.Engine {
+func newRiskAdminTestRouter(reader ports.RiskInsightQuery) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	return NewRiskRouter(goredis.NewClient(&goredis.Options{Addr: "127.0.0.1:0"}), zap.NewNop(), ServiceInfo{
 		Name:        "risk-service",

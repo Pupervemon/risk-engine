@@ -14,7 +14,3 @@ func NewTokenUseCase(rdb *redis.Client, cfg *config.TokenConfig) appports.TokenU
 		TokenOptionsFromSharedConfig(cfg),
 	)
 }
-
-func NewTokenUseCaseWithRepository(repo appports.TokenRepository, cfg *config.TokenConfig) appports.TokenUseCase {
-	return captchaapp.NewTokenUseCase(repo, TokenOptionsFromSharedConfig(cfg))
-}

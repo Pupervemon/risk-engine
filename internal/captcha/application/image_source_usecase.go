@@ -78,7 +78,7 @@ func (u *ImageSourceUseCase) Check(ctx context.Context) (domain.ImageSourceValid
 	}
 
 	return domain.ImageSourceValidationResult{
-		Config:      ImageSourceConfigPublicView(cfg),
+		Config:      cfg.PublicView(),
 		ValidatedAt: time.Now().Format(time.RFC3339),
 	}, nil
 }
@@ -90,7 +90,7 @@ func (u *ImageSourceUseCase) Update(ctx context.Context, patch domain.ImageSourc
 		return status, err
 	}
 
-	candidate, err := BuildImageSourceCandidateConfig(current, patch)
+	candidate, err := domain.BuildImageSourceCandidateConfig(current, patch)
 	if err != nil {
 		_ = u.recordValidation(ctx, err)
 		status, _ := u.Status(ctx)
@@ -169,7 +169,7 @@ func (u *ImageSourceUseCase) currentConfig(ctx context.Context) (domain.ImageSou
 	if !found {
 		return domain.ImageSourceRuntimeConfig{}, fmt.Errorf("image source config is missing")
 	}
-	if err := ValidateImageSourceRuntimeConfig(cfg); err != nil {
+	if err := cfg.Validate(); err != nil {
 		return domain.ImageSourceRuntimeConfig{}, err
 	}
 	return cfg, nil
@@ -194,7 +194,7 @@ func (u *ImageSourceUseCase) buildProvider(cfg domain.ImageSourceRuntimeConfig) 
 	if u == nil || u.providerFactory == nil {
 		return nil, fmt.Errorf("image provider factory is not configured")
 	}
-	if err := ValidateImageSourceRuntimeConfig(cfg); err != nil {
+	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
 	return u.providerFactory.BuildRuntimeProvider(cfg)
@@ -250,7 +250,7 @@ func buildImageSourceStatus(
 
 	return domain.ImageSourceStatus{
 		Enabled: true,
-		Config:  ImageSourceConfigPublicView(cfg),
+		Config:  cfg.PublicView(),
 		ActivePool: domain.ImageSourceActivePoolView{
 			SourceConfigVersion: poolSnapshot.SourceConfigVersion,
 			SourceURL:           poolSnapshot.SourceURL,

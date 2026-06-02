@@ -62,7 +62,7 @@ func TestRiskControlServiceCheckMapsRequestAndResponse(t *testing.T) {
 			Reason: "TOO_MANY_FAILED_ATTEMPTS",
 		},
 	}
-	service := NewRiskControlService(fake, fake, fake, fake)
+	service := NewRiskControlService(fake)
 
 	resp, err := service.Check(context.Background(), &pb.CheckRequest{
 		ReqId:       "req-1",
@@ -92,7 +92,7 @@ func TestRiskControlServiceCheckMapsRequestAndResponse(t *testing.T) {
 }
 
 func TestRiskControlServiceCheckRejectsEmptyRequest(t *testing.T) {
-	service := NewRiskControlService(&fakeRiskUseCases{}, &fakeRiskUseCases{}, &fakeRiskUseCases{}, &fakeRiskUseCases{})
+	service := NewRiskControlService(&fakeRiskUseCases{})
 
 	_, err := service.Check(context.Background(), nil)
 	assertStatus(t, err, codes.InvalidArgument, "REQUEST_EMPTY")
@@ -111,7 +111,7 @@ func TestRiskControlServiceReportEventMapsDomainErrors(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			fake := &fakeRiskUseCases{reportErr: tt.err}
-			service := NewRiskControlService(fake, fake, fake, fake)
+			service := NewRiskControlService(fake)
 
 			_, err := service.ReportEvent(context.Background(), &pb.ReportEventRequest{Scene: pb.Scene_SCENE_REGISTER})
 			assertStatus(t, err, codes.InvalidArgument, tt.message)
@@ -121,7 +121,7 @@ func TestRiskControlServiceReportEventMapsDomainErrors(t *testing.T) {
 
 func TestRiskControlServiceReportEventSuccess(t *testing.T) {
 	fake := &fakeRiskUseCases{reportResult: ports.ReportEventResult{Received: true}}
-	service := NewRiskControlService(fake, fake, fake, fake)
+	service := NewRiskControlService(fake)
 
 	resp, err := service.ReportEvent(context.Background(), &pb.ReportEventRequest{
 		ReqId:     "req-2",
@@ -147,7 +147,7 @@ func TestRiskControlServiceReportEventSuccess(t *testing.T) {
 
 func TestRiskControlServiceAddBlacklistMapsRequest(t *testing.T) {
 	fake := &fakeRiskUseCases{addBlacklistResult: ports.AddBlacklistResult{Success: true}}
-	service := NewRiskControlService(fake, fake, fake, fake)
+	service := NewRiskControlService(fake)
 
 	resp, err := service.AddBlacklist(context.Background(), &pb.AddBlacklistRequest{
 		Type:     pb.AddBlacklistRequest_TYPE_USER_ID,
@@ -183,7 +183,7 @@ func TestRiskControlServiceUserActionErrors(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			fake := &fakeRiskUseCases{onlineErr: tt.err}
-			service := NewRiskControlService(fake, fake, fake, fake)
+			service := NewRiskControlService(fake)
 
 			_, err := service.OnlineSelfTest(context.Background(), &pb.OnlineSelfTestRequest{UserId: "user-4"})
 			assertStatus(t, err, tt.code, tt.message)
@@ -193,7 +193,7 @@ func TestRiskControlServiceUserActionErrors(t *testing.T) {
 
 func TestRiskControlServiceJudgeSubmissionSuccess(t *testing.T) {
 	fake := &fakeRiskUseCases{judgeResult: ports.UserActionResult{Accepted: true, Reason: "PASS"}}
-	service := NewRiskControlService(fake, fake, fake, fake)
+	service := NewRiskControlService(fake)
 
 	resp, err := service.JudgeSubmission(context.Background(), &pb.JudgeSubmissionRequest{
 		ReqId:     "req-5",
@@ -215,7 +215,7 @@ func TestRiskControlServiceJudgeSubmissionSuccess(t *testing.T) {
 func TestRiskControlServicePreservesUnknownErrors(t *testing.T) {
 	expectedErr := errors.New("storage failed")
 	fake := &fakeRiskUseCases{checkErr: expectedErr}
-	service := NewRiskControlService(fake, fake, fake, fake)
+	service := NewRiskControlService(fake)
 
 	_, err := service.Check(context.Background(), &pb.CheckRequest{Ip: "127.0.0.1"})
 	if !errors.Is(err, expectedErr) {
