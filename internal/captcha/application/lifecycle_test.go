@@ -54,9 +54,10 @@ func TestCaptchaLifecycleStartImageRefresh(t *testing.T) {
 		name                 string
 		opts                 LifecycleOptions
 		pool                 *fakeLifecycleImagePool
+		imageSource          *fakeLifecycleImageSource
 		wantSnapshotCalls    int
-		wantStartCalls       int
 		wantRefreshOnStartup bool
+		wantRefreshCalls     int
 	}{
 		{
 			name: "disabled pool does not start",
@@ -66,8 +67,9 @@ func TestCaptchaLifecycleStartImageRefresh(t *testing.T) {
 				RefreshOnStartupProbe: true,
 			},
 			pool:              &fakeLifecycleImagePool{},
+			imageSource:       &fakeLifecycleImageSource{},
 			wantSnapshotCalls: 0,
-			wantStartCalls:    0,
+			wantRefreshCalls:  0,
 		},
 		{
 			name: "empty pool refreshes immediately",
@@ -79,9 +81,10 @@ func TestCaptchaLifecycleStartImageRefresh(t *testing.T) {
 			pool: &fakeLifecycleImagePool{
 				snapshot: domain.ImagePoolSnapshot{ImageCount: 0},
 			},
+			imageSource:          &fakeLifecycleImageSource{},
 			wantSnapshotCalls:    1,
-			wantStartCalls:       1,
 			wantRefreshOnStartup: true,
+			wantRefreshCalls:     1,
 		},
 		{
 			name: "non-empty pool skips immediate refresh",
@@ -93,9 +96,10 @@ func TestCaptchaLifecycleStartImageRefresh(t *testing.T) {
 			pool: &fakeLifecycleImagePool{
 				snapshot: domain.ImagePoolSnapshot{ImageCount: 3},
 			},
+			imageSource:          &fakeLifecycleImageSource{},
 			wantSnapshotCalls:    1,
-			wantStartCalls:       1,
 			wantRefreshOnStartup: false,
+			wantRefreshCalls:     0,
 		},
 		{
 			name: "snapshot error refreshes immediately",
@@ -107,9 +111,10 @@ func TestCaptchaLifecycleStartImageRefresh(t *testing.T) {
 			pool: &fakeLifecycleImagePool{
 				snapshotErr: errors.New("snapshot failed"),
 			},
+			imageSource:          &fakeLifecycleImageSource{},
 			wantSnapshotCalls:    1,
-			wantStartCalls:       1,
 			wantRefreshOnStartup: true,
+			wantRefreshCalls:     1,
 		},
 		{
 			name: "probe disabled starts without snapshot",
@@ -118,10 +123,11 @@ func TestCaptchaLifecycleStartImageRefresh(t *testing.T) {
 				ImageRefreshInterval:  time.Minute,
 				RefreshOnStartupProbe: false,
 			},
+			imageSource:          &fakeLifecycleImageSource{},
 			pool:                 &fakeLifecycleImagePool{},
 			wantSnapshotCalls:    0,
-			wantStartCalls:       1,
 			wantRefreshOnStartup: true,
+			wantRefreshCalls:     1,
 		},
 	}
 
@@ -130,7 +136,9 @@ func TestCaptchaLifecycleStartImageRefresh(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			lifecycle := NewCaptchaLifecycle(tc.pool, tc.opts, nil)
+			lifecycle := NewCaptchaLifecycle(tc.pool, tc.imageSource, tc.opts, nil)
+			defer lifecycle.StopImageRefresh()
+
 			if err := lifecycle.StartImageRefresh(context.Background()); err != nil {
 				t.Fatalf("StartImageRefresh() error = %v", err)
 			}
@@ -138,16 +146,11 @@ func TestCaptchaLifecycleStartImageRefresh(t *testing.T) {
 			if tc.pool.snapshotCalls != tc.wantSnapshotCalls {
 				t.Fatalf("snapshot calls = %d, want %d", tc.pool.snapshotCalls, tc.wantSnapshotCalls)
 			}
-			if tc.pool.startCalls != tc.wantStartCalls {
-				t.Fatalf("start calls = %d, want %d", tc.pool.startCalls, tc.wantStartCalls)
+			if tc.imageSource.refreshCalls != tc.wantRefreshCalls {
+				t.Fatalf("refresh calls = %d, want %d", tc.imageSource.refreshCalls, tc.wantRefreshCalls)
 			}
-			if tc.pool.startCalls > 0 {
-				if tc.pool.startedInterval != tc.opts.ImageRefreshInterval {
-					t.Fatalf("started interval = %v, want %v", tc.pool.startedInterval, tc.opts.ImageRefreshInterval)
-				}
-				if tc.pool.startedRefreshOnStartup != tc.wantRefreshOnStartup {
-					t.Fatalf("refreshOnStartup = %v, want %v", tc.pool.startedRefreshOnStartup, tc.wantRefreshOnStartup)
-				}
+			if got := tc.imageSource.refreshCalls > 0; got != tc.wantRefreshOnStartup {
+				t.Fatalf("refresh on startup = %v, want %v", got, tc.wantRefreshOnStartup)
 			}
 		})
 	}
@@ -157,23 +160,64 @@ func TestCaptchaLifecycleStopImageRefresh(t *testing.T) {
 	t.Parallel()
 
 	pool := &fakeLifecycleImagePool{}
-	lifecycle := NewCaptchaLifecycle(pool, LifecycleOptions{ImagePoolEnabled: true}, nil)
+	lifecycle := NewCaptchaLifecycle(pool, &fakeLifecycleImageSource{}, LifecycleOptions{ImagePoolEnabled: true}, nil)
 
 	lifecycle.StopImageRefresh()
+}
 
-	if pool.stopCalls != 1 {
-		t.Fatalf("stop calls = %d, want 1", pool.stopCalls)
+func TestCaptchaLifecycleRequiresImageSourceWhenPoolEnabled(t *testing.T) {
+	t.Parallel()
+
+	lifecycle := NewCaptchaLifecycle(&fakeLifecycleImagePool{}, nil, LifecycleOptions{ImagePoolEnabled: true}, nil)
+
+	if err := lifecycle.StartImageRefresh(context.Background()); err == nil {
+		t.Fatal("StartImageRefresh() error = nil, want missing image source error")
+	}
+}
+
+func TestNextMidnightRefreshTime(t *testing.T) {
+	t.Parallel()
+
+	location := time.FixedZone("UTC+8", 8*60*60)
+	now := time.Date(2026, time.April, 22, 15, 4, 5, 0, location)
+
+	got := nextMidnightRefreshTime(now)
+	want := time.Date(2026, time.April, 23, 0, 0, 0, 0, location)
+	if !got.Equal(want) {
+		t.Fatalf("nextMidnightRefreshTime(%v) = %v, want %v", now, got, want)
+	}
+}
+
+func TestNextMidnightRefreshTimeAcrossYearBoundary(t *testing.T) {
+	t.Parallel()
+
+	location := time.FixedZone("UTC", 0)
+	now := time.Date(2026, time.December, 31, 23, 59, 59, 0, location)
+
+	got := nextMidnightRefreshTime(now)
+	want := time.Date(2027, time.January, 1, 0, 0, 0, 0, location)
+	if !got.Equal(want) {
+		t.Fatalf("nextMidnightRefreshTime(%v) = %v, want %v", now, got, want)
+	}
+}
+
+func TestNextMidnightRefreshDelay(t *testing.T) {
+	t.Parallel()
+
+	location := time.FixedZone("UTC+8", 8*60*60)
+	now := time.Date(2026, time.April, 22, 23, 59, 30, 0, location)
+
+	got := nextMidnightRefreshDelay(now)
+	want := 30 * time.Second
+	if got != want {
+		t.Fatalf("nextMidnightRefreshDelay(%v) = %v, want %v", now, got, want)
 	}
 }
 
 type fakeLifecycleImagePool struct {
-	snapshot                domain.ImagePoolSnapshot
-	snapshotErr             error
-	snapshotCalls           int
-	startCalls              int
-	stopCalls               int
-	startedInterval         time.Duration
-	startedRefreshOnStartup bool
+	snapshot      domain.ImagePoolSnapshot
+	snapshotErr   error
+	snapshotCalls int
 }
 
 var _ appports.BackgroundImagePool = (*fakeLifecycleImagePool)(nil)
@@ -190,20 +234,29 @@ func (p *fakeLifecycleImagePool) Snapshot(context.Context) (domain.ImagePoolSnap
 	return p.snapshot, nil
 }
 
-func (p *fakeLifecycleImagePool) Refresh(context.Context) error {
-	return nil
-}
-
 func (p *fakeLifecycleImagePool) RefreshWithProvider(context.Context, appports.ImageProvider, domain.ImagePoolGenerationMeta) error {
 	return nil
 }
 
-func (p *fakeLifecycleImagePool) Start(_ context.Context, interval time.Duration, refreshOnStartup bool) {
-	p.startCalls++
-	p.startedInterval = interval
-	p.startedRefreshOnStartup = refreshOnStartup
+type fakeLifecycleImageSource struct {
+	refreshCalls int
 }
 
-func (p *fakeLifecycleImagePool) Stop() {
-	p.stopCalls++
+var _ appports.ImageSourceUseCase = (*fakeLifecycleImageSource)(nil)
+
+func (s *fakeLifecycleImageSource) Status(context.Context) (domain.ImageSourceStatus, error) {
+	return domain.ImageSourceStatus{}, nil
+}
+
+func (s *fakeLifecycleImageSource) Check(context.Context) (domain.ImageSourceValidationResult, error) {
+	return domain.ImageSourceValidationResult{}, nil
+}
+
+func (s *fakeLifecycleImageSource) Update(context.Context, domain.ImageSourcePatch, bool) (domain.ImageSourceStatus, error) {
+	return domain.ImageSourceStatus{}, nil
+}
+
+func (s *fakeLifecycleImageSource) Refresh(context.Context) (domain.ImageSourceStatus, error) {
+	s.refreshCalls++
+	return domain.ImageSourceStatus{}, nil
 }

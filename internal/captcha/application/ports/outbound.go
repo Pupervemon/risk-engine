@@ -25,17 +25,7 @@ type SliderGenerator interface {
 type BackgroundImagePool interface {
 	Random(ctx context.Context) ([]byte, error)
 	Snapshot(ctx context.Context) (domain.ImagePoolSnapshot, error)
-	Refresh(ctx context.Context) error
 	RefreshWithProvider(ctx context.Context, provider ImageProvider, meta domain.ImagePoolGenerationMeta) error
-	Start(ctx context.Context, interval time.Duration, refreshOnStartup bool)
-	Stop()
-}
-
-type ManagedBackgroundImagePool interface {
-	BackgroundImagePool
-	Count(ctx context.Context) (int64, error)
-	SetProvider(provider ImageProvider)
-	PoolSize() int
 }
 
 type ImageProvider interface {

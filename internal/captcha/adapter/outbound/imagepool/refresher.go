@@ -29,10 +29,6 @@ func newImagePoolRefresher(repository imagePoolRepository, logger *zap.Logger, p
 	}
 }
 
-type generationMetaSource interface {
-	LastGenerationMeta() domain.ImagePoolGenerationMeta
-}
-
 func (r *imagePoolRefresher) Refresh(ctx context.Context, provider ImageProvider, meta domain.ImagePoolGenerationMeta) error {
 	if provider == nil {
 		return fmt.Errorf("image provider is not configured")
@@ -57,12 +53,6 @@ func (r *imagePoolRefresher) Refresh(ctx context.Context, provider ImageProvider
 		return fmt.Errorf("failed to fetch images: %w", err)
 	}
 
-	if meta.SourceConfigVersion == 0 {
-		if source, ok := provider.(generationMetaSource); ok {
-			meta = source.LastGenerationMeta()
-		}
-	}
-
 	if err := r.loadImages(ctx, images, meta); err != nil {
 		return fmt.Errorf("failed to load images: %w", err)
 	}
@@ -75,13 +65,6 @@ func (r *imagePoolRefresher) Refresh(ctx context.Context, provider ImageProvider
 		zap.Duration("duration", time.Since(startTime)))
 
 	return nil
-}
-
-func (r *imagePoolRefresher) LoadImages(ctx context.Context, images []ImageMeta) error {
-	if r == nil || r.repository == nil {
-		return fmt.Errorf("image pool repository is not configured")
-	}
-	return r.loadImages(ctx, images, domain.ImagePoolGenerationMeta{})
 }
 
 func (r *imagePoolRefresher) loadImages(ctx context.Context, images []ImageMeta, meta domain.ImagePoolGenerationMeta) error {

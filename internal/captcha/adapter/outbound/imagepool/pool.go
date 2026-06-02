@@ -32,11 +32,9 @@ type ImageProvider = appports.ImageProvider
 // RedisImagePool 基于 Redis 实现验证码图片池。
 type RedisImagePool struct {
 	logger     *zap.Logger
-	provider   ImageProvider
 	poolSize   int
 	repository imagePoolRepository
 	refresher  *imagePoolRefresher
-	scheduler  *imagePoolRefreshScheduler
 	refreshMu  sync.Mutex
 }
 
@@ -54,23 +52,21 @@ type imagePoolRepository interface {
 }
 
 // NewRedisImagePool 创建一个基于 Redis 的图片池实例。
-func NewRedisImagePool(rdb *redis.Client, logger *zap.Logger, provider ImageProvider, poolSize int) *RedisImagePool {
-	return newRedisImagePool(redisadapter.NewImagePoolRepository(rdb), logger, provider, poolSize) // 通过适配器将 Redis 客户端封装成图片池仓库接口，解耦图片池逻辑和 Redis 细节。
+func NewRedisImagePool(rdb *redis.Client, logger *zap.Logger, poolSize int) *RedisImagePool {
+	return newRedisImagePool(redisadapter.NewImagePoolRepository(rdb), logger, poolSize) // 通过适配器将 Redis 客户端封装成图片池仓库接口，解耦图片池逻辑和 Redis 细节。
 }
 
-func newRedisImagePool(repository imagePoolRepository, logger *zap.Logger, provider ImageProvider, poolSize int) *RedisImagePool {
+func newRedisImagePool(repository imagePoolRepository, logger *zap.Logger, poolSize int) *RedisImagePool {
 	if logger == nil {
 		logger = zap.NewNop()
 	}
 
 	pool := &RedisImagePool{
 		logger:     logger,
-		provider:   provider,
 		poolSize:   poolSize,
 		repository: repository,
 	}
 	pool.refresher = newImagePoolRefresher(repository, logger, poolSize)
-	pool.scheduler = newImagePoolRefreshScheduler(logger, poolSize, pool.RefreshNow)
 	return pool
 }
 
@@ -80,21 +76,6 @@ func (p *RedisImagePool) PoolSize() int {
 		return 0
 	}
 	return p.poolSize
-}
-
-// SetProvider 设置图片池使用的图片提供者。
-func (p *RedisImagePool) SetProvider(provider ImageProvider) {
-	if p != nil {
-		p.provider = provider
-	}
-}
-
-// LoadImages 将图片加载到图片池中。
-func (p *RedisImagePool) LoadImages(ctx context.Context, images []ImageMeta) error {
-	if p == nil || p.refresher == nil {
-		return fmt.Errorf("image pool repository is not configured")
-	}
-	return p.refresher.LoadImages(ctx, images)
 }
 
 // GetRandom 从图片池中随机获取一张图片。
@@ -123,25 +104,6 @@ func (p *RedisImagePool) Snapshot(ctx context.Context) (ImagePoolSnapshot, error
 	}
 
 	return repository.Snapshot(ctx)
-}
-
-// StartRefresh 启动图片池的后台刷新任务。
-func (p *RedisImagePool) StartRefresh(ctx context.Context, interval time.Duration, refreshOnStartup bool) {
-	if p != nil && p.scheduler != nil {
-		p.scheduler.Start(ctx, interval, refreshOnStartup)
-	}
-}
-
-// StopRefresh 停止图片池的后台刷新任务。
-func (p *RedisImagePool) StopRefresh() {
-	if p != nil && p.scheduler != nil {
-		p.scheduler.Stop()
-	}
-}
-
-// RefreshNow 立即使用当前配置的图片提供者刷新图片池。
-func (p *RedisImagePool) RefreshNow(ctx context.Context) error {
-	return p.RefreshWithProvider(ctx, p.provider, domain.ImagePoolGenerationMeta{})
 }
 
 // RefreshWithProvider 使用指定的图片提供者刷新图片池。

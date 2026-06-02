@@ -93,20 +93,20 @@ func main() {
 
 	// 创建验证码服务，负责验证码图片、校验逻辑以及运行时图片源管理。
 	captchaComponents := captchabootstrap.NewCaptchaComponents(rdb, &cfg.Captcha, logger)
-	imageSourceComponents, err := captchabootstrap.NewRuntimeImageSourceComponents(rdb, &cfg.Captcha, captchaComponents.ImagePool, logger)
+	imageSourceUseCase, err := captchabootstrap.NewRuntimeImageSourceUseCase(rdb, &cfg.Captcha, captchaComponents.ImagePool, logger)
 	if err != nil {
 		logger.Fatal("failed to enable runtime image source manager", zap.Error(err))
 	}
 	captchaUseCase := captchaComponents.Captcha
 	tokenUseCase := captchabootstrap.NewTokenUseCase(rdb, &cfg.Token)
-	imageSourceUseCase := imageSourceComponents.UseCase
+	captchaLifecycle := captchabootstrap.NewCaptchaLifecycle(captchaComponents.ImagePool, imageSourceUseCase, &cfg.Captcha, logger)
 	// gRPC 暴露的服务实现基于 token use case，提供给外部系统直接调用。
 	grpcService := grpcadapter.NewCaptchaTokenService(tokenUseCase)
 
 	// 如果配置启用了图片池，则启动后台刷新任务，定期预热可用图片资源。
 	if cfg.Captcha.ImagePool.Enabled {
 		logger.Info("starting image pool refresh job")
-		if err := captchaComponents.Lifecycle.StartImageRefresh(context.Background()); err != nil {
+		if err := captchaLifecycle.StartImageRefresh(context.Background()); err != nil {
 			logger.Error("failed to start image pool refresh job", zap.Error(err))
 		}
 	}
@@ -208,7 +208,7 @@ func main() {
 	logger.Info("received shutdown signal", zap.String("signal", sig.String()))
 
 	// 先停止后台刷新任务，避免服务退出时仍然继续访问外部资源。
-	captchaComponents.Lifecycle.StopImageRefresh()
+	captchaLifecycle.StopImageRefresh()
 
 	if err := nacosRegistry.UpdateHealth(false); err != nil {
 		logger.Error("failed to mark nacos service unhealthy", zap.Error(err))

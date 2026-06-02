@@ -16,20 +16,14 @@ import (
 
 const runtimeImageSourceInitTimeout = 3 * time.Second
 
-type RuntimeImageSourceComponents struct {
-	UseCase appports.ImageSourceUseCase
-}
-
-func NewRuntimeImageSourceComponents(
+func NewRuntimeImageSourceUseCase(
 	rdb *redis.Client,
 	cfg *config.CaptchaConfigSpec,
-	imagePool appports.ManagedBackgroundImagePool,
+	imagePool appports.BackgroundImagePool,
 	logger *zap.Logger,
-) (RuntimeImageSourceComponents, error) {
+) (appports.ImageSourceUseCase, error) {
 	if imagePool == nil {
-		return RuntimeImageSourceComponents{
-			UseCase: captchaapp.NewImageSourceUseCase(nil, nil, nil, captchaapp.ImageSourceOptions{}),
-		}, nil
+		return captchaapp.NewImageSourceUseCase(nil, nil, nil, captchaapp.ImageSourceOptions{}), nil
 	}
 
 	width := 320
@@ -47,19 +41,15 @@ func NewRuntimeImageSourceComponents(
 	store := redisadapter.NewImageSourceStore(rdb)
 	providerFactory := imageadapter.NewExternalImageProviderFactory(logger, width, height)
 	if err := ensureRuntimeImageSourceConfig(store, externalImageAPI, logger); err != nil {
-		return RuntimeImageSourceComponents{}, err
+		return nil, err
 	}
 
-	imagePool.SetProvider(captchaapp.NewStoredImageSourceProvider(store, providerFactory))
-
-	return RuntimeImageSourceComponents{
-		UseCase: captchaapp.NewImageSourceUseCase(
-			imagePool,
-			store,
-			providerFactory,
-			captchaapp.ImageSourceOptions{PoolSize: imagePool.PoolSize()},
-		),
-	}, nil
+	return captchaapp.NewImageSourceUseCase(
+		imagePool,
+		store,
+		providerFactory,
+		captchaapp.ImageSourceOptions{PoolSize: imagePoolSizeFromSharedConfig(cfg)},
+	), nil
 }
 
 func ensureRuntimeImageSourceConfig(store appports.RuntimeImageSourceStore, cfg config.ExternalImageAPIConfig, logger *zap.Logger) error {

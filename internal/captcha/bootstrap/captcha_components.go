@@ -12,9 +12,8 @@ import (
 )
 
 type CaptchaComponents struct {
-	ImagePool    appports.ManagedBackgroundImagePool
+	ImagePool    appports.BackgroundImagePool
 	Captcha      appports.CaptchaUseCase
-	Lifecycle    appports.CaptchaLifecycle
 	UseImagePool bool
 }
 
@@ -37,11 +36,20 @@ func NewCaptchaComponents(rdb *redis.Client, cfg *config.CaptchaConfigSpec, logg
 			imagePoolPort,
 			CaptchaOptionsFromSharedConfig(cfg),
 		),
-		Lifecycle: captchaapp.NewCaptchaLifecycle(
-			imagePoolPort,
-			LifecycleOptionsFromSharedConfig(cfg),
-			logger,
-		),
 		UseImagePool: cfg.ImagePool.Enabled,
 	}
+}
+
+func NewCaptchaLifecycle(
+	imagePool appports.BackgroundImagePool,
+	imageSource appports.ImageSourceUseCase,
+	cfg *config.CaptchaConfigSpec,
+	logger *zap.Logger,
+) appports.CaptchaLifecycle {
+	return captchaapp.NewCaptchaLifecycle(
+		imagePool,
+		imageSource,
+		LifecycleOptionsFromSharedConfig(cfg),
+		logger,
+	)
 }

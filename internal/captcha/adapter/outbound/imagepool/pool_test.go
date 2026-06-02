@@ -13,7 +13,7 @@ import (
 func TestRedisImagePoolReturnsErrorWhenRepositoryMissing(t *testing.T) {
 	t.Parallel()
 
-	pool := newRedisImagePool(nil, nil, nil, 1)
+	pool := newRedisImagePool(nil, nil, 1)
 
 	_, err := pool.GetRandom(context.Background())
 	if err == nil {
@@ -24,38 +24,11 @@ func TestRedisImagePoolReturnsErrorWhenRepositoryMissing(t *testing.T) {
 	}
 }
 
-func TestRedisImagePoolLoadImagesUsesRepository(t *testing.T) {
-	t.Parallel()
-
-	repository := &fakeImagePoolRepository{}
-	pool := newRedisImagePool(repository, nil, nil, 1)
-
-	images := []ImageMeta{
-		{ID: "img-1", Data: []byte("image-data"), URL: "https://example.test/img-1.jpg"},
-	}
-	if err := pool.LoadImages(context.Background(), images); err != nil {
-		t.Fatalf("LoadImages() error = %v", err)
-	}
-
-	if repository.loadCalls != 1 {
-		t.Fatalf("load calls = %d, want 1", repository.loadCalls)
-	}
-	if repository.cleanupCalls != 1 {
-		t.Fatalf("cleanup calls = %d, want 1", repository.cleanupCalls)
-	}
-	if repository.loadedGeneration == "" {
-		t.Fatal("loaded generation is empty")
-	}
-	if got := repository.loadedImages[0]; got.ID != images[0].ID || string(got.Data) != string(images[0].Data) || got.URL != images[0].URL {
-		t.Fatalf("loaded image = %+v, want %+v", got, images[0])
-	}
-}
-
 func TestRedisImagePoolRefreshWithProviderUsesLockAndProvider(t *testing.T) {
 	t.Parallel()
 
 	repository := &fakeImagePoolRepository{}
-	pool := newRedisImagePool(repository, nil, nil, 2)
+	pool := newRedisImagePool(repository, nil, 2)
 	provider := &fakeImageProvider{
 		images: []domain.ImageMeta{
 			{ID: "img-1", Data: []byte("image-1"), URL: "https://example.test/img-1.jpg"},
@@ -94,7 +67,7 @@ func TestRedisImagePoolRefreshInProgressUsesDomainError(t *testing.T) {
 	t.Parallel()
 
 	repository := &busyImagePoolRepository{}
-	pool := newRedisImagePool(repository, nil, nil, 1)
+	pool := newRedisImagePool(repository, nil, 1)
 	provider := &fakeImageProvider{
 		images: []domain.ImageMeta{
 			{ID: "img-1", Data: []byte("image-1"), URL: "https://example.test/img-1.jpg"},
