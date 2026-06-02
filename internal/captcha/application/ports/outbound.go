@@ -26,7 +26,7 @@ type BackgroundImagePool interface {
 	Random(ctx context.Context) ([]byte, error)
 	Snapshot(ctx context.Context) (domain.ImagePoolSnapshot, error)
 	Refresh(ctx context.Context) error
-	RefreshWithProvider(ctx context.Context, provider ImageProvider) error
+	RefreshWithProvider(ctx context.Context, provider ImageProvider, meta domain.ImagePoolGenerationMeta) error
 	Start(ctx context.Context, interval time.Duration, refreshOnStartup bool)
 	Stop()
 }
@@ -46,18 +46,9 @@ type ImageProviderFactory interface {
 	BuildRuntimeProvider(cfg domain.ImageSourceRuntimeConfig) (ImageProvider, error)
 }
 
-type RuntimeImageSourceManager interface {
-	BuildCandidateConfig(patch domain.ImageSourcePatch) (domain.ImageSourceRuntimeConfig, error)
-	ValidateConfig(ctx context.Context, candidate domain.ImageSourceRuntimeConfig) (ImageProvider, error)
-	ApplyConfig(candidate domain.ImageSourceRuntimeConfig, provider ImageProvider)
-	RestoreConfig(candidate domain.ImageSourceRuntimeConfig, provider ImageProvider)
-	BuildProvider(cfg domain.ImageSourceRuntimeConfig) (ImageProvider, error)
-	RecordRefreshResult(err error)
-	ValidationResult(candidate domain.ImageSourceRuntimeConfig) domain.ImageSourceValidationResult
-	Status(poolSize int, poolSnapshot domain.ImagePoolSnapshot) domain.ImageSourceStatus
-}
-
 type RuntimeImageSourceStore interface {
 	Load(ctx context.Context) (domain.ImageSourceRuntimeConfig, bool, error)
 	Save(ctx context.Context, cfg domain.ImageSourceRuntimeConfig) error
+	LoadStatus(ctx context.Context) (domain.ImageSourceRuntimeStatus, error)
+	SaveStatus(ctx context.Context, status domain.ImageSourceRuntimeStatus) error
 }

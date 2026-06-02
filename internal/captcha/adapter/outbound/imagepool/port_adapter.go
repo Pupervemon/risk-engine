@@ -68,11 +68,11 @@ func (a *PortAdapter) Refresh(ctx context.Context) error {
 
 // RefreshWithProvider 使用指定的图片提供者刷新池。
 // 当适配器未初始化时返回配置错误。
-func (a *PortAdapter) RefreshWithProvider(ctx context.Context, provider appports.ImageProvider) error {
+func (a *PortAdapter) RefreshWithProvider(ctx context.Context, provider appports.ImageProvider, meta domain.ImagePoolGenerationMeta) error {
 	if a == nil || a.pool == nil {
 		return fmt.Errorf("captcha image pool is not configured")
 	}
-	return a.pool.RefreshWithProvider(ctx, provider)
+	return a.pool.RefreshWithProvider(ctx, provider, meta)
 }
 
 // Start 为包装的池启动后台刷新。

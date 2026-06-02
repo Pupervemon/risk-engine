@@ -1,29 +1,29 @@
 basePath: /
 definitions:
-  transport.ErrorResponse:
+  http.ErrorResponse:
     properties:
       error:
         type: string
     type: object
-  transport.HealthComponentDoc:
+  http.HealthComponentDoc:
     properties:
       message:
         type: string
       status:
         type: string
     type: object
-  transport.HealthResponseDoc:
+  http.HealthResponseDoc:
     properties:
       components:
         additionalProperties:
-          $ref: '#/definitions/transport.HealthComponentDoc'
+          $ref: '#/definitions/http.HealthComponentDoc'
         type: object
       status:
         type: string
       timestamp:
         type: string
     type: object
-  transport.RiskIPDetailDoc:
+  http.RiskIPDetailDoc:
     properties:
       blacklist_expire_at:
         type: string
@@ -72,7 +72,7 @@ definitions:
       total_verifies:
         type: integer
     type: object
-  transport.RiskIPEventDoc:
+  http.RiskIPEventDoc:
     properties:
       action:
         type: string
@@ -103,7 +103,7 @@ definitions:
       user_id_masked:
         type: string
     type: object
-  transport.RiskIPEventsResponseDoc:
+  http.RiskIPEventsResponseDoc:
     properties:
       has_more:
         type: boolean
@@ -111,7 +111,7 @@ definitions:
         type: string
       items:
         items:
-          $ref: '#/definitions/transport.RiskIPEventDoc'
+          $ref: '#/definitions/http.RiskIPEventDoc'
         type: array
       limit:
         type: integer
@@ -120,13 +120,13 @@ definitions:
       total:
         type: integer
     type: object
-  transport.RiskIPListResponseDoc:
+  http.RiskIPListResponseDoc:
     properties:
       has_more:
         type: boolean
       items:
         items:
-          $ref: '#/definitions/transport.RiskIPSummaryDoc'
+          $ref: '#/definitions/http.RiskIPSummaryDoc'
         type: array
       limit:
         type: integer
@@ -135,7 +135,7 @@ definitions:
       total:
         type: integer
     type: object
-  transport.RiskIPSummaryDoc:
+  http.RiskIPSummaryDoc:
     properties:
       blacklist_expire_at:
         type: string
@@ -182,7 +182,7 @@ definitions:
       total_verifies:
         type: integer
     type: object
-  transport.ServiceEndpointsResponse:
+  http.ServiceEndpointsResponse:
     properties:
       admin_riskip:
         type: string
@@ -193,12 +193,12 @@ definitions:
       http:
         type: string
     type: object
-  transport.ServiceInfoResponse:
+  http.ServiceInfoResponse:
     properties:
       description:
         type: string
       endpoints:
-        $ref: '#/definitions/transport.ServiceEndpointsResponse'
+        $ref: '#/definitions/http.ServiceEndpointsResponse'
       protocol:
         type: string
       service:
@@ -247,23 +247,23 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/transport.RiskIPListResponseDoc'
+            $ref: '#/definitions/http.RiskIPListResponseDoc'
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/transport.ErrorResponse'
+            $ref: '#/definitions/http.ErrorResponse'
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/transport.ErrorResponse'
+            $ref: '#/definitions/http.ErrorResponse'
         "403":
           description: Forbidden
           schema:
-            $ref: '#/definitions/transport.ErrorResponse'
+            $ref: '#/definitions/http.ErrorResponse'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/transport.ErrorResponse'
+            $ref: '#/definitions/http.ErrorResponse'
       summary: List risk IP insights
       tags:
       - Risk Admin
@@ -293,27 +293,27 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/transport.RiskIPDetailDoc'
+            $ref: '#/definitions/http.RiskIPDetailDoc'
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/transport.ErrorResponse'
+            $ref: '#/definitions/http.ErrorResponse'
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/transport.ErrorResponse'
+            $ref: '#/definitions/http.ErrorResponse'
         "403":
           description: Forbidden
           schema:
-            $ref: '#/definitions/transport.ErrorResponse'
+            $ref: '#/definitions/http.ErrorResponse'
         "404":
           description: Not Found
           schema:
-            $ref: '#/definitions/transport.ErrorResponse'
+            $ref: '#/definitions/http.ErrorResponse'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/transport.ErrorResponse'
+            $ref: '#/definitions/http.ErrorResponse'
       summary: Get risk IP insight
       tags:
       - Risk Admin
@@ -351,27 +351,27 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/transport.RiskIPEventsResponseDoc'
+            $ref: '#/definitions/http.RiskIPEventsResponseDoc'
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/transport.ErrorResponse'
+            $ref: '#/definitions/http.ErrorResponse'
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/transport.ErrorResponse'
+            $ref: '#/definitions/http.ErrorResponse'
         "403":
           description: Forbidden
           schema:
-            $ref: '#/definitions/transport.ErrorResponse'
+            $ref: '#/definitions/http.ErrorResponse'
         "404":
           description: Not Found
           schema:
-            $ref: '#/definitions/transport.ErrorResponse'
+            $ref: '#/definitions/http.ErrorResponse'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/transport.ErrorResponse'
+            $ref: '#/definitions/http.ErrorResponse'
       summary: List risk IP events
       tags:
       - Risk Admin
@@ -384,11 +384,11 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/transport.HealthResponseDoc'
+            $ref: '#/definitions/http.HealthResponseDoc'
         "503":
           description: Service Unavailable
           schema:
-            $ref: '#/definitions/transport.HealthResponseDoc'
+            $ref: '#/definitions/http.HealthResponseDoc'
       summary: Service health check
       tags:
       - Health
@@ -401,7 +401,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/transport.ServiceInfoResponse'
+            $ref: '#/definitions/http.ServiceInfoResponse'
       summary: Service metadata
       tags:
       - Service Info

@@ -42,7 +42,7 @@ type TokenVerification struct {
 
 type ImageSourceUseCase interface {
 	Status(ctx context.Context) (domain.ImageSourceStatus, error)
-	Validate(ctx context.Context, patch domain.ImageSourcePatch) (domain.ImageSourceValidationResult, error)
+	Check(ctx context.Context) (domain.ImageSourceValidationResult, error)
 	Update(ctx context.Context, patch domain.ImageSourcePatch, triggerRefresh bool) (domain.ImageSourceStatus, error)
 	Refresh(ctx context.Context) (domain.ImageSourceStatus, error)
 }

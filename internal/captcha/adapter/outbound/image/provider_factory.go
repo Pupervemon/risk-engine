@@ -34,10 +34,6 @@ func (f *ExternalImageProviderFactory) BuildRuntimeProvider(cfg domain.ImageSour
 	return NewExternalImageFetcher(externalImageAPIConfigFromRuntime(cfg), f.logger, f.width, f.height), nil
 }
 
-func (f *ExternalImageProviderFactory) BuildImagePoolProvider(cfg ExternalImageAPIConfig) appports.ImageProvider {
-	return CustomImageFetcher(cfg, f.logger, f.width, f.height)
-}
-
 func externalImageAPIConfigFromRuntime(cfg domain.ImageSourceRuntimeConfig) ExternalImageAPIConfig {
 	return ExternalImageAPIConfig{
 		URL:                cfg.URL,

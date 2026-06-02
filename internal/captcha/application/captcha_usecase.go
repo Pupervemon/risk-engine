@@ -109,13 +109,18 @@ func (u *CaptchaUseCase) Verify(ctx context.Context, cmd appports.VerifyCaptchaC
 		return appports.VerifyCaptchaResult{Valid: false, Reason: "REDIS_ERROR"}, err
 	}
 
-	if !sliderPositionMatches(cmd.PointX, answer.DY, answer.DX, answer.DY, u.opts.SliderTolerance) {
+	if !sliderPositionMatches(cmd.PointX, cmd.PointY, answer.DX, answer.DY, u.opts.SliderTolerance) {
 		_ = u.answers.Delete(ctx, cmd.CaptchaID)
 		return appports.VerifyCaptchaResult{Valid: false, Reason: "CAPTCHA_MISMATCH"}, nil
 	}
 
-	if u.opts.TrackValidation.Enabled && cmd.MouseTrackProvided && len(cmd.MouseTrack) > 0 {
-		trackResult := validateTrack(u.opts.TrackValidation, cmd.MouseTrack, answer.DX)
+	if u.opts.TrackValidation.Enabled {
+		if !cmd.MouseTrackProvided || len(cmd.MouseTrack) == 0 {
+			_ = u.answers.Delete(ctx, cmd.CaptchaID)
+			return appports.VerifyCaptchaResult{Valid: false, Reason: "TRACK_REQUIRED"}, nil
+		}
+
+		trackResult := validateTrack(u.opts.TrackValidation, cmd.MouseTrack, answer.DX, answer.DY)
 		if !trackResult.Valid {
 			_ = u.answers.Delete(ctx, cmd.CaptchaID)
 			return appports.VerifyCaptchaResult{Valid: false, Reason: trackResult.Code}, nil

@@ -1,5 +1,16 @@
 basePath: /
 definitions:
+  http.ActiveImagePoolDoc:
+    properties:
+      imageCount:
+        type: integer
+      refreshedAt:
+        type: string
+      sourceConfigVersion:
+        type: integer
+      sourceURL:
+        type: string
+    type: object
   http.CaptchaChallengeResponseDoc:
     properties:
       captchaId:
@@ -50,8 +61,19 @@ definitions:
         type: integer
       timeoutSeconds:
         type: integer
+      updatedAt:
+        type: string
       url:
         type: string
+      version:
+        type: integer
+    type: object
+  http.ImageSourceDebugDoc:
+    properties:
+      activeGeneration:
+        type: string
+      generationCount:
+        type: integer
     type: object
   http.ImageSourceOperationErrorResponseDoc:
     properties:
@@ -62,25 +84,8 @@ definitions:
       status:
         $ref: '#/definitions/http.ImageSourceStatusDoc'
     type: object
-  http.ImageSourcePatchRequestDoc:
+  http.ImageSourceOperationStatusDoc:
     properties:
-      apiKey:
-        type: string
-      rateLimitPerMinute:
-        type: integer
-      retryCount:
-        type: integer
-      timeoutSeconds:
-        type: integer
-      url:
-        type: string
-    type: object
-  http.ImageSourceStatusDoc:
-    properties:
-      config:
-        $ref: '#/definitions/http.ImageSourceConfigDoc'
-      enabled:
-        type: boolean
       lastRefreshError:
         type: string
       lastRefreshedAt:
@@ -89,14 +94,30 @@ definitions:
         type: string
       lastValidationError:
         type: string
-      poolImageCount:
-        type: integer
+    type: object
+  http.ImageSourceStatusDoc:
+    properties:
+      activePool:
+        $ref: '#/definitions/http.ActiveImagePoolDoc'
+      config:
+        $ref: '#/definitions/http.ImageSourceConfigDoc'
+      debug:
+        $ref: '#/definitions/http.ImageSourceDebugDoc'
+      enabled:
+        type: boolean
       poolSize:
         type: integer
-      updatedAt:
+      status:
+        $ref: '#/definitions/http.ImageSourceOperationStatusDoc'
+      sync:
+        $ref: '#/definitions/http.ImageSourceSyncDoc'
+    type: object
+  http.ImageSourceSyncDoc:
+    properties:
+      message:
         type: string
-      version:
-        type: integer
+      poolSyncedWithConfig:
+        type: boolean
     type: object
   http.ImageSourceUpdateRequestDoc:
     properties:
@@ -224,8 +245,8 @@ paths:
       - Health
   /api/v1/admin/image-source:
     get:
-      description: Returns the current runtime image source configuration and latest
-        validation and refresh state for the captcha image pool.
+      description: Returns the current Redis image source config, the active image
+        pool source, and whether the pool is synced with the config.
       parameters:
       - description: Authenticated user ID injected by the gateway
         in: header
@@ -263,8 +284,8 @@ paths:
     put:
       consumes:
       - application/json
-      description: Validates, persists, and applies a new runtime image source configuration,
-        with optional immediate image-pool refresh.
+      description: Checks a candidate image source, then persists it to Redis. The
+        image pool uses it after a refresh.
       parameters:
       - description: Authenticated user ID injected by the gateway
         in: header
@@ -317,10 +338,52 @@ paths:
       summary: Update runtime image source config
       tags:
       - Image Source Admin
+  /api/v1/admin/image-source/check:
+    post:
+      description: Checks the current Redis image source config by fetching one image
+        without refreshing the pool.
+      parameters:
+      - description: Authenticated user ID injected by the gateway
+        in: header
+        name: X-User-Id
+        required: true
+        type: string
+      - description: Authenticated role list injected by the gateway. Supports comma-separated
+          values or JSON array. Must include 3 (admin).
+        in: header
+        name: X-User-Roles
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/http.ImageSourceValidationResultDoc'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/http.ErrorResponseDoc'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/http.ErrorResponseDoc'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/http.ErrorResponseDoc'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/http.ErrorResponseDoc'
+      summary: Check current image source config
+      tags:
+      - Image Source Admin
   /api/v1/admin/image-source/refresh:
     post:
       description: Triggers an immediate refresh of the captcha image pool using the
-        currently active runtime image source configuration.
+        current Redis image source config.
       parameters:
       - description: Authenticated user ID injected by the gateway
         in: header
@@ -357,56 +420,6 @@ paths:
           schema:
             $ref: '#/definitions/http.ImageSourceOperationErrorResponseDoc'
       summary: Refresh captcha image pool
-      tags:
-      - Image Source Admin
-  /api/v1/admin/image-source/validate:
-    post:
-      consumes:
-      - application/json
-      description: Validates a candidate upstream image source configuration without
-        applying it.
-      parameters:
-      - description: Authenticated user ID injected by the gateway
-        in: header
-        name: X-User-Id
-        required: true
-        type: string
-      - description: Authenticated role list injected by the gateway. Supports comma-separated
-          values or JSON array. Must include 3 (admin).
-        in: header
-        name: X-User-Roles
-        required: true
-        type: string
-      - description: Candidate image source patch
-        in: body
-        name: body
-        required: true
-        schema:
-          $ref: '#/definitions/http.ImageSourcePatchRequestDoc'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/http.ImageSourceValidationResultDoc'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/http.ErrorResponseDoc'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/http.ErrorResponseDoc'
-        "403":
-          description: Forbidden
-          schema:
-            $ref: '#/definitions/http.ErrorResponseDoc'
-        "409":
-          description: Conflict
-          schema:
-            $ref: '#/definitions/http.ErrorResponseDoc'
-      summary: Validate runtime image source config
       tags:
       - Image Source Admin
   /api/v1/captcha:

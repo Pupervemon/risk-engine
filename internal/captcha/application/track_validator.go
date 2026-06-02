@@ -7,7 +7,7 @@ import (
 	"github.com/Pupervemon/risk-engine/internal/captcha/domain"
 )
 
-func validateTrack(opts TrackValidationOptions, track []domain.TrackPoint, targetX int) domain.TrackValidationResult {
+func validateTrack(opts TrackValidationOptions, track []domain.TrackPoint, targetX int, targetY int) domain.TrackValidationResult {
 	if !opts.Enabled {
 		return domain.TrackValidationResult{Valid: true, Code: "OK", Message: "track validation disabled"}
 	}
@@ -46,7 +46,7 @@ func validateTrack(opts TrackValidationOptions, track []domain.TrackPoint, targe
 	}
 
 	startX := track[0].X
-	if startX > opts.PointTolerance*2 {
+	if startX > opts.PointTolerance*2 { //起点位置检测
 		return domain.TrackValidationResult{
 			Valid:   false,
 			Code:    "TRACK_INVALID_START",
@@ -61,6 +61,14 @@ func validateTrack(opts TrackValidationOptions, track []domain.TrackPoint, targe
 			Valid:   false,
 			Code:    "TRACK_INVALID_END",
 			Message: fmt.Sprintf("end position mismatch: %d vs %d (distance=%d)", endX, targetX, distanceToTarget),
+		}
+	}
+
+	if !trackYStaysNearTarget(track, targetY, opts.PointTolerance) {
+		return domain.TrackValidationResult{
+			Valid:   false,
+			Code:    "TRACK_INVALID_Y",
+			Message: fmt.Sprintf("track y is too far from target y=%d", targetY),
 		}
 	}
 
@@ -98,6 +106,15 @@ func trackIsContinuous(track []domain.TrackPoint) bool {
 		}
 	}
 
+	return true
+}
+
+func trackYStaysNearTarget(track []domain.TrackPoint, targetY int, tolerance int) bool {
+	for _, point := range track {
+		if absInt(point.Y-targetY) > tolerance {
+			return false
+		}
+	}
 	return true
 }
 

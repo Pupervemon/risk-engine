@@ -34,26 +34,47 @@ type imageSourceUpdatePayload struct {
 }
 
 type imageSourceConfigResponse struct {
+	Version            int64  `json:"version"`
 	URL                string `json:"url"`
 	APIKeyConfigured   bool   `json:"apiKeyConfigured"`
 	TimeoutSeconds     int    `json:"timeoutSeconds"`
 	RateLimitPerMinute int    `json:"rateLimitPerMinute"`
 	RetryCount         int    `json:"retryCount"`
+	UpdatedAt          string `json:"updatedAt,omitempty"`
+}
+
+type activeImagePoolResponse struct {
+	SourceConfigVersion int64  `json:"sourceConfigVersion"`
+	SourceURL           string `json:"sourceURL,omitempty"`
+	ImageCount          int64  `json:"imageCount"`
+	RefreshedAt         string `json:"refreshedAt,omitempty"`
+}
+
+type imageSourceSyncResponse struct {
+	PoolSyncedWithConfig bool   `json:"poolSyncedWithConfig"`
+	Message              string `json:"message"`
+}
+
+type imageSourceOperationStatusResponse struct {
+	LastValidatedAt     string `json:"lastValidatedAt,omitempty"`
+	LastValidationError string `json:"lastValidationError,omitempty"`
+	LastRefreshedAt     string `json:"lastRefreshedAt,omitempty"`
+	LastRefreshError    string `json:"lastRefreshError,omitempty"`
+}
+
+type imageSourceDebugResponse struct {
+	ActiveGeneration string `json:"activeGeneration,omitempty"`
+	GenerationCount  int64  `json:"generationCount"`
 }
 
 type imageSourceStatusResponse struct {
-	Enabled             bool                      `json:"enabled"`
-	Version             int64                     `json:"version"`
-	Config              imageSourceConfigResponse `json:"config"`
-	UpdatedAt           string                    `json:"updatedAt,omitempty"`
-	LastValidatedAt     string                    `json:"lastValidatedAt,omitempty"`
-	LastValidationError string                    `json:"lastValidationError,omitempty"`
-	LastRefreshedAt     string                    `json:"lastRefreshedAt,omitempty"`
-	LastRefreshError    string                    `json:"lastRefreshError,omitempty"`
-	PoolSize            int                       `json:"poolSize"`
-	PoolImageCount      int64                     `json:"poolImageCount"`
-	ActiveGeneration    string                    `json:"activeGeneration,omitempty"`
-	GenerationCount     int64                     `json:"generationCount"`
+	Enabled    bool                               `json:"enabled"`
+	Config     imageSourceConfigResponse          `json:"config"`
+	ActivePool activeImagePoolResponse            `json:"activePool"`
+	Sync       imageSourceSyncResponse            `json:"sync"`
+	Status     imageSourceOperationStatusResponse `json:"status"`
+	PoolSize   int                                `json:"poolSize"`
+	Debug      *imageSourceDebugResponse          `json:"debug,omitempty"`
 }
 
 type imageSourceValidationResponse struct {
@@ -72,17 +93,10 @@ func (h *ImageSourceAdminHandler) GetImageSource(c *gin.Context) {
 	writeJSON(c, http.StatusOK, imageSourceStatusResponseFromDomain(status))
 }
 
-func (h *ImageSourceAdminHandler) ValidateImageSource(c *gin.Context) {
-	var req imageSourcePatchPayload
-	if err := c.ShouldBindJSON(&req); err != nil {
-		h.Logger.Warn("failed to parse image source validate request", zap.Error(err))
-		writeJSON(c, http.StatusBadRequest, errorResponse{Error: "INVALID_JSON", Reason: "BAD_REQUEST"})
-		return
-	}
-
-	result, err := h.ImageSource.Validate(c.Request.Context(), buildImageSourcePatch(req))
+func (h *ImageSourceAdminHandler) CheckImageSource(c *gin.Context) {
+	result, err := h.ImageSource.Check(c.Request.Context())
 	if err != nil {
-		h.writeImageSourceError(c, err, "IMAGE_SOURCE_VALIDATE_FAILED")
+		h.writeImageSourceError(c, err, "IMAGE_SOURCE_CHECK_FAILED")
 		return
 	}
 
@@ -97,7 +111,7 @@ func (h *ImageSourceAdminHandler) UpdateImageSource(c *gin.Context) {
 		return
 	}
 
-	triggerRefresh := true
+	triggerRefresh := false
 	if req.TriggerRefresh != nil {
 		triggerRefresh = *req.TriggerRefresh
 	}
@@ -203,19 +217,37 @@ func buildImageSourcePatch(req imageSourcePatchPayload) domain.ImageSourcePatch 
 }
 
 func imageSourceStatusResponseFromDomain(status domain.ImageSourceStatus) imageSourceStatusResponse {
-	return imageSourceStatusResponse{
-		Enabled:             status.Enabled,
-		Version:             status.Version,
-		Config:              imageSourceConfigResponseFromDomain(status.Config),
-		UpdatedAt:           status.UpdatedAt,
-		LastValidatedAt:     status.LastValidatedAt,
-		LastValidationError: status.LastValidationError,
-		LastRefreshedAt:     status.LastRefreshedAt,
-		LastRefreshError:    status.LastRefreshError,
-		PoolSize:            status.PoolSize,
-		PoolImageCount:      status.PoolImageCount,
-		ActiveGeneration:    status.ActiveGeneration,
-		GenerationCount:     status.GenerationCount,
+	response := imageSourceStatusResponse{
+		Enabled:    status.Enabled,
+		Config:     imageSourceConfigResponseFromDomain(status.Config),
+		ActivePool: activeImagePoolResponseFromDomain(status.ActivePool),
+		Sync: imageSourceSyncResponse{
+			PoolSyncedWithConfig: status.Sync.PoolSyncedWithConfig,
+			Message:              status.Sync.Message,
+		},
+		Status: imageSourceOperationStatusResponse{
+			LastValidatedAt:     status.LastValidatedAt,
+			LastValidationError: status.LastValidationError,
+			LastRefreshedAt:     status.LastRefreshedAt,
+			LastRefreshError:    status.LastRefreshError,
+		},
+		PoolSize: status.PoolSize,
+	}
+	if status.ActiveGeneration != "" || status.GenerationCount > 0 {
+		response.Debug = &imageSourceDebugResponse{
+			ActiveGeneration: status.ActiveGeneration,
+			GenerationCount:  status.GenerationCount,
+		}
+	}
+	return response
+}
+
+func activeImagePoolResponseFromDomain(activePool domain.ImageSourceActivePoolView) activeImagePoolResponse {
+	return activeImagePoolResponse{
+		SourceConfigVersion: activePool.SourceConfigVersion,
+		SourceURL:           activePool.SourceURL,
+		ImageCount:          activePool.ImageCount,
+		RefreshedAt:         activePool.RefreshedAt,
 	}
 }
 
@@ -228,10 +260,12 @@ func imageSourceValidationResponseFromDomain(result domain.ImageSourceValidation
 
 func imageSourceConfigResponseFromDomain(config domain.ImageSourceConfigView) imageSourceConfigResponse {
 	return imageSourceConfigResponse{
+		Version:            config.Version,
 		URL:                config.URL,
 		APIKeyConfigured:   config.APIKeyConfigured,
 		TimeoutSeconds:     config.TimeoutSeconds,
 		RateLimitPerMinute: config.RateLimitPerMinute,
 		RetryCount:         config.RetryCount,
+		UpdatedAt:          config.UpdatedAt,
 	}
 }

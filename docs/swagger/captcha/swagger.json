@@ -85,7 +85,7 @@
         },
         "/api/v1/admin/image-source": {
             "get": {
-                "description": "Returns the current runtime image source configuration and latest validation and refresh state for the captcha image pool.",
+                "description": "Returns the current Redis image source config, the active image pool source, and whether the pool is synced with the config.",
                 "produces": [
                     "application/json"
                 ],
@@ -137,7 +137,7 @@
                 }
             },
             "put": {
-                "description": "Validates, persists, and applies a new runtime image source configuration, with optional immediate image-pool refresh.",
+                "description": "Checks a candidate image source, then persists it to Redis. The image pool uses it after a refresh.",
                 "consumes": [
                     "application/json"
                 ],
@@ -219,9 +219,69 @@
                 }
             }
         },
+        "/api/v1/admin/image-source/check": {
+            "post": {
+                "description": "Checks the current Redis image source config by fetching one image without refreshing the pool.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Image Source Admin"
+                ],
+                "summary": "Check current image source config",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Authenticated user ID injected by the gateway",
+                        "name": "X-User-Id",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Authenticated role list injected by the gateway. Supports comma-separated values or JSON array. Must include 3 (admin).",
+                        "name": "X-User-Roles",
+                        "in": "header",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/http.ImageSourceValidationResultDoc"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/http.ErrorResponseDoc"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/http.ErrorResponseDoc"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/http.ErrorResponseDoc"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/http.ErrorResponseDoc"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/admin/image-source/refresh": {
             "post": {
-                "description": "Triggers an immediate refresh of the captcha image pool using the currently active runtime image source configuration.",
+                "description": "Triggers an immediate refresh of the captcha image pool using the current Redis image source config.",
                 "produces": [
                     "application/json"
                 ],
@@ -274,78 +334,6 @@
                         "description": "Bad Gateway",
                         "schema": {
                             "$ref": "#/definitions/http.ImageSourceOperationErrorResponseDoc"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/admin/image-source/validate": {
-            "post": {
-                "description": "Validates a candidate upstream image source configuration without applying it.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Image Source Admin"
-                ],
-                "summary": "Validate runtime image source config",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Authenticated user ID injected by the gateway",
-                        "name": "X-User-Id",
-                        "in": "header",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Authenticated role list injected by the gateway. Supports comma-separated values or JSON array. Must include 3 (admin).",
-                        "name": "X-User-Roles",
-                        "in": "header",
-                        "required": true
-                    },
-                    {
-                        "description": "Candidate image source patch",
-                        "name": "body",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/http.ImageSourcePatchRequestDoc"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/http.ImageSourceValidationResultDoc"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/http.ErrorResponseDoc"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/http.ErrorResponseDoc"
-                        }
-                    },
-                    "403": {
-                        "description": "Forbidden",
-                        "schema": {
-                            "$ref": "#/definitions/http.ErrorResponseDoc"
-                        }
-                    },
-                    "409": {
-                        "description": "Conflict",
-                        "schema": {
-                            "$ref": "#/definitions/http.ErrorResponseDoc"
                         }
                     }
                 }
@@ -451,6 +439,23 @@
         }
     },
     "definitions": {
+        "http.ActiveImagePoolDoc": {
+            "type": "object",
+            "properties": {
+                "imageCount": {
+                    "type": "integer"
+                },
+                "refreshedAt": {
+                    "type": "string"
+                },
+                "sourceConfigVersion": {
+                    "type": "integer"
+                },
+                "sourceURL": {
+                    "type": "string"
+                }
+            }
+        },
         "http.CaptchaChallengeResponseDoc": {
             "type": "object",
             "properties": {
@@ -528,8 +533,25 @@
                 "timeoutSeconds": {
                     "type": "integer"
                 },
+                "updatedAt": {
+                    "type": "string"
+                },
                 "url": {
                     "type": "string"
+                },
+                "version": {
+                    "type": "integer"
+                }
+            }
+        },
+        "http.ImageSourceDebugDoc": {
+            "type": "object",
+            "properties": {
+                "activeGeneration": {
+                    "type": "string"
+                },
+                "generationCount": {
+                    "type": "integer"
                 }
             }
         },
@@ -547,35 +569,9 @@
                 }
             }
         },
-        "http.ImageSourcePatchRequestDoc": {
+        "http.ImageSourceOperationStatusDoc": {
             "type": "object",
             "properties": {
-                "apiKey": {
-                    "type": "string"
-                },
-                "rateLimitPerMinute": {
-                    "type": "integer"
-                },
-                "retryCount": {
-                    "type": "integer"
-                },
-                "timeoutSeconds": {
-                    "type": "integer"
-                },
-                "url": {
-                    "type": "string"
-                }
-            }
-        },
-        "http.ImageSourceStatusDoc": {
-            "type": "object",
-            "properties": {
-                "config": {
-                    "$ref": "#/definitions/http.ImageSourceConfigDoc"
-                },
-                "enabled": {
-                    "type": "boolean"
-                },
                 "lastRefreshError": {
                     "type": "string"
                 },
@@ -587,18 +583,43 @@
                 },
                 "lastValidationError": {
                     "type": "string"
+                }
+            }
+        },
+        "http.ImageSourceStatusDoc": {
+            "type": "object",
+            "properties": {
+                "activePool": {
+                    "$ref": "#/definitions/http.ActiveImagePoolDoc"
                 },
-                "poolImageCount": {
-                    "type": "integer"
+                "config": {
+                    "$ref": "#/definitions/http.ImageSourceConfigDoc"
+                },
+                "debug": {
+                    "$ref": "#/definitions/http.ImageSourceDebugDoc"
+                },
+                "enabled": {
+                    "type": "boolean"
                 },
                 "poolSize": {
                     "type": "integer"
                 },
-                "updatedAt": {
+                "status": {
+                    "$ref": "#/definitions/http.ImageSourceOperationStatusDoc"
+                },
+                "sync": {
+                    "$ref": "#/definitions/http.ImageSourceSyncDoc"
+                }
+            }
+        },
+        "http.ImageSourceSyncDoc": {
+            "type": "object",
+            "properties": {
+                "message": {
                     "type": "string"
                 },
-                "version": {
-                    "type": "integer"
+                "poolSyncedWithConfig": {
+                    "type": "boolean"
                 }
             }
         },

@@ -2,6 +2,7 @@ package redisadapter
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -105,11 +106,31 @@ func (r *ImagePoolRepository) Snapshot(ctx context.Context) (domain.ImagePoolSna
 	if imageCountCmd != nil {
 		snapshot.ImageCount = imageCountCmd.Val()
 	}
+	if generation != "" {
+		meta, err := r.loadGenerationMeta(ctx, generation)
+		if err != nil {
+			return domain.ImagePoolSnapshot{}, err
+		}
+		snapshot.SourceConfigVersion = meta.SourceConfigVersion
+		snapshot.SourceURL = meta.SourceURL
+		snapshot.RefreshedAt = meta.CreatedAt
+		if meta.ImageCount > 0 {
+			snapshot.ImageCount = meta.ImageCount
+		}
+	}
 
 	return snapshot, nil
 }
 
-func (r *ImagePoolRepository) LoadImagesIntoGeneration(ctx context.Context, generation string, images []domain.ImageMeta) (string, error) {
+type imagePoolGenerationMetaPayload struct {
+	Generation          string `json:"generation"`
+	SourceConfigVersion int64  `json:"sourceConfigVersion"`
+	SourceURL           string `json:"sourceURL"`
+	ImageCount          int64  `json:"imageCount"`
+	CreatedAt           string `json:"createdAt"`
+}
+
+func (r *ImagePoolRepository) LoadImagesIntoGeneration(ctx context.Context, generation string, images []domain.ImageMeta, meta domain.ImagePoolGenerationMeta) (string, error) {
 	if r == nil || r.rdb == nil {
 		return "", fmt.Errorf("image pool repository is not configured")
 	}
@@ -129,6 +150,9 @@ func (r *ImagePoolRepository) LoadImagesIntoGeneration(ctx context.Context, gene
 	for _, img := range images {
 		pipe.Set(ctx, generationImageKey(generation, img.ID), img.Data, 0)
 		pipe.SAdd(ctx, generationIndexKey(generation), img.ID)
+	}
+	if err := queueGenerationMeta(ctx, pipe, generation, meta); err != nil {
+		return previousGeneration, err
 	}
 
 	if _, err := pipe.Exec(ctx); err != nil {
@@ -210,6 +234,56 @@ func (r *ImagePoolRepository) activateGeneration(ctx context.Context, generation
 	return err
 }
 
+func queueGenerationMeta(ctx context.Context, pipe redis.Pipeliner, generation string, meta domain.ImagePoolGenerationMeta) error {
+	meta.Generation = generation
+	if meta.CreatedAt == "" {
+		meta.CreatedAt = time.Now().Format(time.RFC3339)
+	}
+
+	payload := imagePoolGenerationMetaPayload{
+		Generation:          meta.Generation,
+		SourceConfigVersion: meta.SourceConfigVersion,
+		SourceURL:           meta.SourceURL,
+		ImageCount:          meta.ImageCount,
+		CreatedAt:           meta.CreatedAt,
+	}
+
+	encoded, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("encode image generation meta: %w", err)
+	}
+
+	pipe.Set(ctx, generationMetaKey(generation), encoded, 0)
+	return nil
+}
+
+func (r *ImagePoolRepository) loadGenerationMeta(ctx context.Context, generation string) (domain.ImagePoolGenerationMeta, error) {
+	if generation == "" {
+		return domain.ImagePoolGenerationMeta{}, nil
+	}
+
+	value, err := r.rdb.Get(ctx, generationMetaKey(generation)).Bytes()
+	if err == redis.Nil {
+		return domain.ImagePoolGenerationMeta{}, nil
+	}
+	if err != nil {
+		return domain.ImagePoolGenerationMeta{}, fmt.Errorf("get image generation meta: %w", err)
+	}
+
+	var payload imagePoolGenerationMetaPayload
+	if err := json.Unmarshal(value, &payload); err != nil {
+		return domain.ImagePoolGenerationMeta{}, fmt.Errorf("decode image generation meta: %w", err)
+	}
+
+	return domain.ImagePoolGenerationMeta{
+		Generation:          payload.Generation,
+		SourceConfigVersion: payload.SourceConfigVersion,
+		SourceURL:           payload.SourceURL,
+		ImageCount:          payload.ImageCount,
+		CreatedAt:           payload.CreatedAt,
+	}, nil
+}
+
 func (r *ImagePoolRepository) deleteGeneration(ctx context.Context, generation string) error {
 	ids, err := r.rdb.SMembers(ctx, generationIndexKey(generation)).Result()
 	if err != nil && err != redis.Nil {
@@ -221,6 +295,7 @@ func (r *ImagePoolRepository) deleteGeneration(ctx context.Context, generation s
 		pipe.Del(ctx, generationImageKey(generation, imageID))
 	}
 	pipe.Del(ctx, generationIndexKey(generation))
+	pipe.Del(ctx, generationMetaKey(generation))
 
 	if _, err := pipe.Exec(ctx); err != nil {
 		return fmt.Errorf("delete image generation %s: %w", generation, err)
@@ -257,6 +332,10 @@ func generationIndexKey(generation string) string {
 	return fmt.Sprintf("captcha:images:g:%s:index", generation)
 }
 
+func generationMetaKey(generation string) string {
+	return fmt.Sprintf("captcha:images:g:%s:meta", generation)
+}
+
 func refreshLockKey() string {
-	return "captcha:images:refresh:lock"
+	return "captcha:images:refresh_lock"
 }

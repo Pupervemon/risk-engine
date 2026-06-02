@@ -47,7 +47,7 @@ type imagePoolRepository interface {
 	Random(ctx context.Context) ([]byte, error)
 	Count(ctx context.Context) (int64, error)
 	Snapshot(ctx context.Context) (domain.ImagePoolSnapshot, error)
-	LoadImagesIntoGeneration(ctx context.Context, generation string, images []domain.ImageMeta) (string, error)
+	LoadImagesIntoGeneration(ctx context.Context, generation string, images []domain.ImageMeta, meta domain.ImagePoolGenerationMeta) (string, error)
 	CleanupStaleGenerations(ctx context.Context, generationsToKeep int) error
 	AcquireRefreshLock(ctx context.Context, token string, ttl time.Duration) (bool, error)
 	ReleaseRefreshLock(ctx context.Context, token string) error
@@ -55,7 +55,7 @@ type imagePoolRepository interface {
 
 // NewRedisImagePool 创建一个基于 Redis 的图片池实例。
 func NewRedisImagePool(rdb *redis.Client, logger *zap.Logger, provider ImageProvider, poolSize int) *RedisImagePool {
-	return newRedisImagePool(redisadapter.NewImagePoolRepository(rdb), logger, provider, poolSize)
+	return newRedisImagePool(redisadapter.NewImagePoolRepository(rdb), logger, provider, poolSize) // 通过适配器将 Redis 客户端封装成图片池仓库接口，解耦图片池逻辑和 Redis 细节。
 }
 
 func newRedisImagePool(repository imagePoolRepository, logger *zap.Logger, provider ImageProvider, poolSize int) *RedisImagePool {
@@ -80,11 +80,6 @@ func (p *RedisImagePool) PoolSize() int {
 		return 0
 	}
 	return p.poolSize
-}
-
-// HasProvider 判断图片池是否已配置图片提供者。
-func (p *RedisImagePool) HasProvider() bool {
-	return p != nil && p.provider != nil
 }
 
 // SetProvider 设置图片池使用的图片提供者。
@@ -146,11 +141,11 @@ func (p *RedisImagePool) StopRefresh() {
 
 // RefreshNow 立即使用当前配置的图片提供者刷新图片池。
 func (p *RedisImagePool) RefreshNow(ctx context.Context) error {
-	return p.RefreshWithProvider(ctx, p.provider)
+	return p.RefreshWithProvider(ctx, p.provider, domain.ImagePoolGenerationMeta{})
 }
 
 // RefreshWithProvider 使用指定的图片提供者刷新图片池。
-func (p *RedisImagePool) RefreshWithProvider(ctx context.Context, provider ImageProvider) error {
+func (p *RedisImagePool) RefreshWithProvider(ctx context.Context, provider ImageProvider, meta domain.ImagePoolGenerationMeta) error {
 	if provider == nil {
 		return fmt.Errorf("image provider is not configured")
 	}
@@ -158,14 +153,14 @@ func (p *RedisImagePool) RefreshWithProvider(ctx context.Context, provider Image
 	p.refreshMu.Lock()
 	defer p.refreshMu.Unlock()
 
-	return p.refreshWithProvider(ctx, provider)
+	return p.refreshWithProvider(ctx, provider, meta)
 }
 
-func (p *RedisImagePool) refreshWithProvider(ctx context.Context, provider ImageProvider) error {
+func (p *RedisImagePool) refreshWithProvider(ctx context.Context, provider ImageProvider, meta domain.ImagePoolGenerationMeta) error {
 	if p == nil || p.refresher == nil {
 		return fmt.Errorf("image pool repository is not configured")
 	}
-	return p.refresher.Refresh(ctx, provider)
+	return p.refresher.Refresh(ctx, provider, meta)
 }
 
 func (p *RedisImagePool) imagePoolRepository() (imagePoolRepository, error) {

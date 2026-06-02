@@ -194,7 +194,7 @@ func (p *fakeLifecycleImagePool) Refresh(context.Context) error {
 	return nil
 }
 
-func (p *fakeLifecycleImagePool) RefreshWithProvider(context.Context, appports.ImageProvider) error {
+func (p *fakeLifecycleImagePool) RefreshWithProvider(context.Context, appports.ImageProvider, domain.ImagePoolGenerationMeta) error {
 	return nil
 }
 

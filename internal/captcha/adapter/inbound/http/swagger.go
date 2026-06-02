@@ -25,7 +25,7 @@ func swaggerVerifyCaptcha() {}
 
 // swaggerGetImageSource godoc
 // @Summary Get runtime image source status
-// @Description Returns the current runtime image source configuration and latest validation and refresh state for the captcha image pool. `version` is the runtime config version, while `activeGeneration` is the currently exposed image-pool generation.
+// @Description Returns the current Redis image source config, the active image pool source, and whether the pool is synced with the config.
 // @Tags Image Source Admin
 // @Produce json
 // @Param X-User-Id header string true "Authenticated user ID injected by the gateway"
@@ -37,26 +37,24 @@ func swaggerVerifyCaptcha() {}
 // @Router /api/v1/admin/image-source [get]
 func swaggerGetImageSource() {}
 
-// swaggerValidateImageSource godoc
-// @Summary Validate runtime image source config
-// @Description Validates a candidate upstream image source configuration without applying it.
+// swaggerCheckImageSource godoc
+// @Summary Check current image source config
+// @Description Checks the current Redis image source config by fetching one image without refreshing the pool.
 // @Tags Image Source Admin
-// @Accept json
 // @Produce json
 // @Param X-User-Id header string true "Authenticated user ID injected by the gateway"
 // @Param X-User-Roles header string true "Authenticated role list injected by the gateway. Supports comma-separated values or JSON array. Must include 3 (admin)."
-// @Param body body ImageSourcePatchRequestDoc true "Candidate image source patch"
 // @Success 200 {object} ImageSourceValidationResultDoc
 // @Failure 400 {object} ErrorResponseDoc
 // @Failure 401 {object} ErrorResponseDoc
 // @Failure 403 {object} ErrorResponseDoc
 // @Failure 409 {object} ErrorResponseDoc
-// @Router /api/v1/admin/image-source/validate [post]
-func swaggerValidateImageSource() {}
+// @Router /api/v1/admin/image-source/check [post]
+func swaggerCheckImageSource() {}
 
 // swaggerUpdateImageSource godoc
 // @Summary Update runtime image source config
-// @Description Validates, persists, and applies a new runtime image source configuration, with optional immediate image-pool refresh.
+// @Description Checks a candidate image source, then persists it to Redis. The image pool uses it after a refresh.
 // @Tags Image Source Admin
 // @Accept json
 // @Produce json
@@ -75,7 +73,7 @@ func swaggerUpdateImageSource() {}
 
 // swaggerRefreshImageSource godoc
 // @Summary Refresh captcha image pool
-// @Description Triggers an immediate refresh of the captcha image pool using the currently active runtime image source configuration.
+// @Description Triggers an immediate refresh of the captcha image pool using the current Redis image source config.
 // @Tags Image Source Admin
 // @Produce json
 // @Param X-User-Id header string true "Authenticated user ID injected by the gateway"

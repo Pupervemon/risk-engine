@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"image"
-	"image/color"
 	stddraw "image/draw"
 	_ "image/gif"
 	_ "image/jpeg"
@@ -23,7 +22,6 @@ import (
 
 	appports "github.com/Pupervemon/risk-engine/internal/captcha/application/ports"
 	"github.com/Pupervemon/risk-engine/internal/captcha/domain"
-	"github.com/google/uuid"
 	"go.uber.org/zap"
 	xdraw "golang.org/x/image/draw"
 	_ "golang.org/x/image/webp"
@@ -870,97 +868,4 @@ func maxInt(left, right int) int {
 		return left
 	}
 	return right
-}
-
-// MockImageFetcher 是一个本地/测试兜底实现，不依赖外部图片接口。
-// 它会生成一些纯色 PNG，便于在接口未配置或上游不可用时继续跑通流程。
-type MockImageFetcher struct {
-	logger       *zap.Logger
-	targetWidth  int
-	targetHeight int
-}
-
-// NewMockImageFetcher 创建 mock 图片抓取器。
-// 只有在外部接口未配置时才通常会使用它。
-func NewMockImageFetcher(logger *zap.Logger, targetWidth, targetHeight int) *MockImageFetcher {
-	if logger == nil {
-		logger = zap.NewNop()
-	}
-
-	return &MockImageFetcher{
-		logger:       logger,
-		targetWidth:  targetWidth,
-		targetHeight: targetHeight,
-	}
-}
-
-// FetchImages 实现 mock 版本的图片提供逻辑。
-// 这里直接生成指定尺寸的纯色图片，用于测试和降级场景。
-var _ appports.ImageProvider = (*MockImageFetcher)(nil)
-
-func (m *MockImageFetcher) FetchImages(ctx context.Context, count int) ([]domain.ImageMeta, error) {
-	m.logger.Warn("using mock captcha image fetcher", zap.Int("count", count))
-
-	images := make([]domain.ImageMeta, 0, count)
-
-	// 预设几种浅色背景，避免生成的图片过于单一，也方便人工识别。
-	colors := []struct {
-		r, g, b uint8
-		name    string
-	}{
-		{230, 240, 250, "light-blue"},
-		{240, 250, 230, "light-green"},
-		{250, 240, 230, "light-orange"},
-		{245, 235, 255, "light-purple"},
-		{255, 245, 235, "light-pink"},
-	}
-
-	// 逐张生成，过程中持续检查上下文是否已取消。
-	for i := 0; i < count; i++ {
-		select {
-		case <-ctx.Done():
-			return images, ctx.Err()
-		default:
-		}
-
-		colorIdx := i % len(colors)
-		bgColor := colors[colorIdx]
-
-		img := image.NewRGBA(image.Rect(0, 0, m.targetWidth, m.targetHeight))
-		fillColor := color.RGBA{R: bgColor.r, G: bgColor.g, B: bgColor.b, A: 255}
-		for y := 0; y < m.targetHeight; y++ {
-			for x := 0; x < m.targetWidth; x++ {
-				img.SetRGBA(x, y, fillColor)
-			}
-		}
-
-		var buf bytes.Buffer
-		if err := png.Encode(&buf, img); err != nil {
-			m.logger.Error("failed to encode mock image", zap.Error(err))
-			continue
-		}
-
-		imageID := fmt.Sprintf("mock-%s-%s", bgColor.name, uuid.New().String()[:8])
-		images = append(images, domain.ImageMeta{
-			ID:   imageID,
-			Data: buf.Bytes(),
-			URL:  fmt.Sprintf("mock://%s", bgColor.name),
-		})
-	}
-
-	return images, nil
-}
-
-// CustomImageFetcher 根据配置返回实际的外部抓取器，或者在未配置时返回 mock 实现。
-// 这是业务层最常用的入口，调用方无需关心具体实现细节。
-func CustomImageFetcher(apiConfig ExternalImageAPIConfig, logger *zap.Logger, width, height int) appports.ImageProvider {
-	if apiConfig.URL == "" {
-		if logger == nil {
-			logger = zap.NewNop()
-		}
-		logger.Warn("external image API is not configured, falling back to mock images")
-		return NewMockImageFetcher(logger, width, height)
-	}
-
-	return NewExternalImageFetcher(apiConfig, logger, width, height)
 }

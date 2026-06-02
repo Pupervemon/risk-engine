@@ -2,6 +2,7 @@ package bootstrap
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	imageadapter "github.com/Pupervemon/risk-engine/internal/captcha/adapter/outbound/image"
@@ -13,10 +14,9 @@ import (
 	"go.uber.org/zap"
 )
 
-const runtimeImageSourceRestoreTimeout = 3 * time.Second
+const runtimeImageSourceInitTimeout = 3 * time.Second
 
 type RuntimeImageSourceComponents struct {
-	Manager appports.RuntimeImageSourceManager
 	UseCase appports.ImageSourceUseCase
 }
 
@@ -44,61 +44,57 @@ func NewRuntimeImageSourceComponents(
 		externalImageAPI = cfg.ExternalImageAPI
 	}
 
+	store := redisadapter.NewImageSourceStore(rdb)
 	providerFactory := imageadapter.NewExternalImageProviderFactory(logger, width, height)
-	manager, err := captchaapp.NewRuntimeImageSourceManager(
-		ImageSourceRuntimeConfigFromShared(externalImageAPI),
-		logger,
-		width,
-		height,
-		providerFactory,
-	)
-	if err != nil {
+	if err := ensureRuntimeImageSourceConfig(store, externalImageAPI, logger); err != nil {
 		return RuntimeImageSourceComponents{}, err
 	}
 
-	store := redisadapter.NewImageSourceStore(rdb)
-	restoreRuntimeImageSource(store, manager, logger)
-	imagePool.SetProvider(manager)
+	imagePool.SetProvider(captchaapp.NewStoredImageSourceProvider(store, providerFactory))
 
 	return RuntimeImageSourceComponents{
-		Manager: manager,
 		UseCase: captchaapp.NewImageSourceUseCase(
-			manager,
 			imagePool,
 			store,
+			providerFactory,
 			captchaapp.ImageSourceOptions{PoolSize: imagePool.PoolSize()},
 		),
 	}, nil
 }
 
-func restoreRuntimeImageSource(store appports.RuntimeImageSourceStore, manager appports.RuntimeImageSourceManager, logger *zap.Logger) {
-	if store == nil || manager == nil {
-		return
+func ensureRuntimeImageSourceConfig(store appports.RuntimeImageSourceStore, cfg config.ExternalImageAPIConfig, logger *zap.Logger) error {
+	if store == nil {
+		return fmt.Errorf("runtime image source store is not configured")
 	}
 	if logger == nil {
 		logger = zap.NewNop()
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), runtimeImageSourceRestoreTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), runtimeImageSourceInitTimeout)
 	defer cancel()
 
 	persisted, found, err := store.Load(ctx)
 	if err != nil {
-		logger.Warn("failed to load persisted runtime image source config", zap.Error(err))
-		return
+		return err
 	}
-	if !found {
-		return
-	}
-
-	provider, err := manager.BuildProvider(persisted)
-	if err != nil {
-		logger.Warn("persisted runtime image source config is invalid; keeping file config",
-			zap.Error(err),
-			zap.String("url", persisted.URL))
-		return
+	if found {
+		if err := captchaapp.ValidateImageSourceRuntimeConfig(persisted); err != nil {
+			return err
+		}
+		logger.Info("loaded runtime image source config from redis", zap.String("url", persisted.URL))
+		return nil
 	}
 
-	manager.RestoreConfig(persisted, provider)
-	logger.Info("restored runtime image source config from redis", zap.String("url", persisted.URL))
+	initial := captchaapp.NormalizeImageSourceRuntimeConfig(ImageSourceRuntimeConfigFromShared(cfg))
+	initial.Version = 1
+	initial.UpdatedAt = time.Now().Format(time.RFC3339)
+	if err := captchaapp.ValidateImageSourceRuntimeConfig(initial); err != nil {
+		return err
+	}
+	if err := store.Save(ctx, initial); err != nil {
+		return err
+	}
+
+	logger.Info("initialized runtime image source config in redis", zap.String("url", initial.URL))
+	return nil
 }

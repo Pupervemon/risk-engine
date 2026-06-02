@@ -63,15 +63,6 @@ type ReadinessResponseDoc struct {
 	Components map[string]HealthComponentDoc `json:"components,omitempty"`
 }
 
-// ImageSourcePatchRequestDoc documents partial image source updates and validation.
-type ImageSourcePatchRequestDoc struct {
-	URL                string `json:"url,omitempty"`
-	APIKey             string `json:"apiKey,omitempty"`
-	TimeoutSeconds     int    `json:"timeoutSeconds,omitempty"`
-	RateLimitPerMinute int    `json:"rateLimitPerMinute,omitempty"`
-	RetryCount         int    `json:"retryCount,omitempty"`
-}
-
 // ImageSourceUpdateRequestDoc documents full update requests for the runtime image source.
 type ImageSourceUpdateRequestDoc struct {
 	URL                string `json:"url,omitempty"`
@@ -84,30 +75,51 @@ type ImageSourceUpdateRequestDoc struct {
 
 // ImageSourceConfigDoc documents the sanitized runtime image source config.
 type ImageSourceConfigDoc struct {
+	Version            int64  `json:"version"`
 	URL                string `json:"url"`
 	APIKeyConfigured   bool   `json:"apiKeyConfigured"`
 	TimeoutSeconds     int    `json:"timeoutSeconds"`
 	RateLimitPerMinute int    `json:"rateLimitPerMinute"`
 	RetryCount         int    `json:"retryCount"`
+	UpdatedAt          string `json:"updatedAt,omitempty"`
+}
+
+type ActiveImagePoolDoc struct {
+	SourceConfigVersion int64  `json:"sourceConfigVersion"`
+	SourceURL           string `json:"sourceURL,omitempty"`
+	ImageCount          int64  `json:"imageCount"`
+	RefreshedAt         string `json:"refreshedAt,omitempty"`
+}
+
+type ImageSourceSyncDoc struct {
+	PoolSyncedWithConfig bool   `json:"poolSyncedWithConfig"`
+	Message              string `json:"message"`
+}
+
+type ImageSourceOperationStatusDoc struct {
+	LastValidatedAt     string `json:"lastValidatedAt,omitempty"`
+	LastValidationError string `json:"lastValidationError,omitempty"`
+	LastRefreshedAt     string `json:"lastRefreshedAt,omitempty"`
+	LastRefreshError    string `json:"lastRefreshError,omitempty"`
+}
+
+type ImageSourceDebugDoc struct {
+	ActiveGeneration string `json:"activeGeneration,omitempty"`
+	GenerationCount  int64  `json:"generationCount"`
 }
 
 // ImageSourceStatusDoc documents the current runtime image source state.
 type ImageSourceStatusDoc struct {
-	Enabled             bool                 `json:"enabled"`
-	Version             int64                `json:"version"`
-	Config              ImageSourceConfigDoc `json:"config"`
-	UpdatedAt           string               `json:"updatedAt,omitempty"`
-	LastValidatedAt     string               `json:"lastValidatedAt,omitempty"`
-	LastValidationError string               `json:"lastValidationError,omitempty"`
-	LastRefreshedAt     string               `json:"lastRefreshedAt,omitempty"`
-	LastRefreshError    string               `json:"lastRefreshError,omitempty"`
-	PoolSize            int                  `json:"poolSize"`
-	PoolImageCount      int64                `json:"poolImageCount"`
-	ActiveGeneration    string               `json:"activeGeneration,omitempty"`
-	GenerationCount     int64                `json:"generationCount"`
+	Enabled    bool                          `json:"enabled"`
+	Config     ImageSourceConfigDoc          `json:"config"`
+	ActivePool ActiveImagePoolDoc            `json:"activePool"`
+	Sync       ImageSourceSyncDoc            `json:"sync"`
+	Status     ImageSourceOperationStatusDoc `json:"status"`
+	PoolSize   int                           `json:"poolSize"`
+	Debug      *ImageSourceDebugDoc          `json:"debug,omitempty"`
 }
 
-// ImageSourceValidationResultDoc documents the validate endpoint response.
+// ImageSourceValidationResultDoc documents the check endpoint response.
 type ImageSourceValidationResultDoc struct {
 	Config      ImageSourceConfigDoc `json:"config"`
 	ValidatedAt string               `json:"validatedAt,omitempty"`

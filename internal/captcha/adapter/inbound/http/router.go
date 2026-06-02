@@ -49,7 +49,7 @@ func NewCaptchaRouter(handler *CaptchaHandler, imageSourceHandler *ImageSourceAd
 		}
 		{
 			admin.GET("/image-source", imageSourceHandler.GetImageSource)
-			admin.POST("/image-source/validate", imageSourceHandler.ValidateImageSource)
+			admin.POST("/image-source/check", imageSourceHandler.CheckImageSource)
 			admin.PUT("/image-source", imageSourceHandler.UpdateImageSource)
 			admin.POST("/image-source/refresh", imageSourceHandler.RefreshImageSource)
 		}

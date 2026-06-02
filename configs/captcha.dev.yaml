@@ -33,7 +33,7 @@ captcha:
     refresh_interval_minutes: 60
 
   track_validation:
-    enabled: false
+    enabled: true
     min_points: 10
     min_duration_ms: 500
     max_duration_ms: 20000

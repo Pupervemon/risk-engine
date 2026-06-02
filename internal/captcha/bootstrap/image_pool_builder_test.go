@@ -36,7 +36,4 @@ func TestNewConfiguredImagePoolUsesDefaultPoolSize(t *testing.T) {
 	if pool.PoolSize() != 50 {
 		t.Fatalf("pool size = %d, want 50", pool.PoolSize())
 	}
-	if !pool.HasProvider() {
-		t.Fatal("provider is nil")
-	}
 }

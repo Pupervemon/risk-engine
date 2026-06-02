@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/Pupervemon/risk-engine/internal/captcha/domain"
 	"go.uber.org/zap"
 )
 
@@ -28,7 +29,11 @@ func newImagePoolRefresher(repository imagePoolRepository, logger *zap.Logger, p
 	}
 }
 
-func (r *imagePoolRefresher) Refresh(ctx context.Context, provider ImageProvider) error {
+type generationMetaSource interface {
+	LastGenerationMeta() domain.ImagePoolGenerationMeta
+}
+
+func (r *imagePoolRefresher) Refresh(ctx context.Context, provider ImageProvider, meta domain.ImagePoolGenerationMeta) error {
 	if provider == nil {
 		return fmt.Errorf("image provider is not configured")
 	}
@@ -52,7 +57,13 @@ func (r *imagePoolRefresher) Refresh(ctx context.Context, provider ImageProvider
 		return fmt.Errorf("failed to fetch images: %w", err)
 	}
 
-	if err := r.loadImages(ctx, images); err != nil {
+	if meta.SourceConfigVersion == 0 {
+		if source, ok := provider.(generationMetaSource); ok {
+			meta = source.LastGenerationMeta()
+		}
+	}
+
+	if err := r.loadImages(ctx, images, meta); err != nil {
 		return fmt.Errorf("failed to load images: %w", err)
 	}
 
@@ -70,10 +81,10 @@ func (r *imagePoolRefresher) LoadImages(ctx context.Context, images []ImageMeta)
 	if r == nil || r.repository == nil {
 		return fmt.Errorf("image pool repository is not configured")
 	}
-	return r.loadImages(ctx, images)
+	return r.loadImages(ctx, images, domain.ImagePoolGenerationMeta{})
 }
 
-func (r *imagePoolRefresher) loadImages(ctx context.Context, images []ImageMeta) error {
+func (r *imagePoolRefresher) loadImages(ctx context.Context, images []ImageMeta, meta domain.ImagePoolGenerationMeta) error {
 	if len(images) == 0 {
 		return fmt.Errorf("no images to load")
 	}
@@ -83,10 +94,10 @@ func (r *imagePoolRefresher) loadImages(ctx context.Context, images []ImageMeta)
 		return fmt.Errorf("generate image pool generation: %w", err)
 	}
 
-	return r.loadImagesIntoGeneration(ctx, generation, images)
+	return r.loadImagesIntoGeneration(ctx, generation, images, meta)
 }
 
-func (r *imagePoolRefresher) loadImagesIntoGeneration(ctx context.Context, generation string, images []ImageMeta) error {
+func (r *imagePoolRefresher) loadImagesIntoGeneration(ctx context.Context, generation string, images []ImageMeta, meta domain.ImagePoolGenerationMeta) error {
 	if generation == "" {
 		return fmt.Errorf("image pool generation is required")
 	}
@@ -96,7 +107,13 @@ func (r *imagePoolRefresher) loadImagesIntoGeneration(ctx context.Context, gener
 		zap.String("generation", generation))
 	startTime := time.Now()
 
-	previousGeneration, err := r.repository.LoadImagesIntoGeneration(ctx, generation, images)
+	meta.Generation = generation
+	meta.ImageCount = int64(len(images))
+	if meta.CreatedAt == "" {
+		meta.CreatedAt = time.Now().Format(time.RFC3339)
+	}
+
+	previousGeneration, err := r.repository.LoadImagesIntoGeneration(ctx, generation, images, meta)
 	if err != nil {
 		r.logger.Error("failed to load images into redis",
 			zap.Error(err),

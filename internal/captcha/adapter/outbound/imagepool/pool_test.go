@@ -63,7 +63,10 @@ func TestRedisImagePoolRefreshWithProviderUsesLockAndProvider(t *testing.T) {
 		},
 	}
 
-	if err := pool.RefreshWithProvider(context.Background(), provider); err != nil {
+	if err := pool.RefreshWithProvider(context.Background(), provider, domain.ImagePoolGenerationMeta{
+		SourceConfigVersion: 1,
+		SourceURL:           "https://example.test/api",
+	}); err != nil {
 		t.Fatalf("RefreshWithProvider() error = %v", err)
 	}
 
@@ -101,7 +104,7 @@ func TestRedisImagePoolRefreshInProgressUsesDomainError(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond)
 	defer cancel()
 
-	err := pool.RefreshWithProvider(ctx, provider)
+	err := pool.RefreshWithProvider(ctx, provider, domain.ImagePoolGenerationMeta{})
 	if !errors.Is(err, domain.ErrImagePoolRefreshInProgress) {
 		t.Fatalf("RefreshWithProvider() error = %v, want domain refresh-in-progress error", err)
 	}
@@ -128,7 +131,7 @@ func (r *fakeImagePoolRepository) Snapshot(context.Context) (domain.ImagePoolSna
 	return domain.ImagePoolSnapshot{ImageCount: int64(len(r.loadedImages))}, nil
 }
 
-func (r *fakeImagePoolRepository) LoadImagesIntoGeneration(_ context.Context, generation string, images []domain.ImageMeta) (string, error) {
+func (r *fakeImagePoolRepository) LoadImagesIntoGeneration(_ context.Context, generation string, images []domain.ImageMeta, _ domain.ImagePoolGenerationMeta) (string, error) {
 	r.loadCalls++
 	r.loadedGeneration = generation
 	r.loadedImages = append([]domain.ImageMeta(nil), images...)

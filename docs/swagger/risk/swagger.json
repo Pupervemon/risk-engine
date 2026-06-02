@@ -59,31 +59,31 @@
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/transport.RiskIPListResponseDoc"
+                            "$ref": "#/definitions/http.RiskIPListResponseDoc"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/transport.ErrorResponse"
+                            "$ref": "#/definitions/http.ErrorResponse"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/transport.ErrorResponse"
+                            "$ref": "#/definitions/http.ErrorResponse"
                         }
                     },
                     "403": {
                         "description": "Forbidden",
                         "schema": {
-                            "$ref": "#/definitions/transport.ErrorResponse"
+                            "$ref": "#/definitions/http.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/transport.ErrorResponse"
+                            "$ref": "#/definitions/http.ErrorResponse"
                         }
                     }
                 }
@@ -126,37 +126,37 @@
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/transport.RiskIPDetailDoc"
+                            "$ref": "#/definitions/http.RiskIPDetailDoc"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/transport.ErrorResponse"
+                            "$ref": "#/definitions/http.ErrorResponse"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/transport.ErrorResponse"
+                            "$ref": "#/definitions/http.ErrorResponse"
                         }
                     },
                     "403": {
                         "description": "Forbidden",
                         "schema": {
-                            "$ref": "#/definitions/transport.ErrorResponse"
+                            "$ref": "#/definitions/http.ErrorResponse"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/transport.ErrorResponse"
+                            "$ref": "#/definitions/http.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/transport.ErrorResponse"
+                            "$ref": "#/definitions/http.ErrorResponse"
                         }
                     }
                 }
@@ -211,37 +211,37 @@
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/transport.RiskIPEventsResponseDoc"
+                            "$ref": "#/definitions/http.RiskIPEventsResponseDoc"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/transport.ErrorResponse"
+                            "$ref": "#/definitions/http.ErrorResponse"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/transport.ErrorResponse"
+                            "$ref": "#/definitions/http.ErrorResponse"
                         }
                     },
                     "403": {
                         "description": "Forbidden",
                         "schema": {
-                            "$ref": "#/definitions/transport.ErrorResponse"
+                            "$ref": "#/definitions/http.ErrorResponse"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/transport.ErrorResponse"
+                            "$ref": "#/definitions/http.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/transport.ErrorResponse"
+                            "$ref": "#/definitions/http.ErrorResponse"
                         }
                     }
                 }
@@ -261,13 +261,13 @@
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/transport.HealthResponseDoc"
+                            "$ref": "#/definitions/http.HealthResponseDoc"
                         }
                     },
                     "503": {
                         "description": "Service Unavailable",
                         "schema": {
-                            "$ref": "#/definitions/transport.HealthResponseDoc"
+                            "$ref": "#/definitions/http.HealthResponseDoc"
                         }
                     }
                 }
@@ -287,7 +287,7 @@
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/transport.ServiceInfoResponse"
+                            "$ref": "#/definitions/http.ServiceInfoResponse"
                         }
                     }
                 }
@@ -295,7 +295,7 @@
         }
     },
     "definitions": {
-        "transport.ErrorResponse": {
+        "http.ErrorResponse": {
             "type": "object",
             "properties": {
                 "error": {
@@ -303,7 +303,7 @@
                 }
             }
         },
-        "transport.HealthComponentDoc": {
+        "http.HealthComponentDoc": {
             "type": "object",
             "properties": {
                 "message": {
@@ -314,13 +314,13 @@
                 }
             }
         },
-        "transport.HealthResponseDoc": {
+        "http.HealthResponseDoc": {
             "type": "object",
             "properties": {
                 "components": {
                     "type": "object",
                     "additionalProperties": {
-                        "$ref": "#/definitions/transport.HealthComponentDoc"
+                        "$ref": "#/definitions/http.HealthComponentDoc"
                     }
                 },
                 "status": {
@@ -331,7 +331,7 @@
                 }
             }
         },
-        "transport.RiskIPDetailDoc": {
+        "http.RiskIPDetailDoc": {
             "type": "object",
             "properties": {
                 "blacklist_expire_at": {
@@ -405,7 +405,7 @@
                 }
             }
         },
-        "transport.RiskIPEventDoc": {
+        "http.RiskIPEventDoc": {
             "type": "object",
             "properties": {
                 "action": {
@@ -452,7 +452,7 @@
                 }
             }
         },
-        "transport.RiskIPEventsResponseDoc": {
+        "http.RiskIPEventsResponseDoc": {
             "type": "object",
             "properties": {
                 "has_more": {
@@ -464,7 +464,7 @@
                 "items": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/transport.RiskIPEventDoc"
+                        "$ref": "#/definitions/http.RiskIPEventDoc"
                     }
                 },
                 "limit": {
@@ -478,7 +478,7 @@
                 }
             }
         },
-        "transport.RiskIPListResponseDoc": {
+        "http.RiskIPListResponseDoc": {
             "type": "object",
             "properties": {
                 "has_more": {
@@ -487,7 +487,7 @@
                 "items": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/transport.RiskIPSummaryDoc"
+                        "$ref": "#/definitions/http.RiskIPSummaryDoc"
                     }
                 },
                 "limit": {
@@ -501,7 +501,7 @@
                 }
             }
         },
-        "transport.RiskIPSummaryDoc": {
+        "http.RiskIPSummaryDoc": {
             "type": "object",
             "properties": {
                 "blacklist_expire_at": {
@@ -572,7 +572,7 @@
                 }
             }
         },
-        "transport.ServiceEndpointsResponse": {
+        "http.ServiceEndpointsResponse": {
             "type": "object",
             "properties": {
                 "admin_riskip": {
@@ -589,14 +589,14 @@
                 }
             }
         },
-        "transport.ServiceInfoResponse": {
+        "http.ServiceInfoResponse": {
             "type": "object",
             "properties": {
                 "description": {
                     "type": "string"
                 },
                 "endpoints": {
-                    "$ref": "#/definitions/transport.ServiceEndpointsResponse"
+                    "$ref": "#/definitions/http.ServiceEndpointsResponse"
                 },
                 "protocol": {
                     "type": "string"
